@@ -160,6 +160,59 @@ def test_wrong_arguments():
     assert result["evidence"]["code"] == "    return add(1);"
 
 
+def test_wrong_arguments_too_few():
+    """GCC 14 emits 'too few arguments to function' for arity under-supply."""
+    diag = {
+        "file": "temp.cpp",
+        "line": 7,
+        "column": 21,
+        "severity": "error",
+        "message": "too few arguments to function 'int add(int, int)'",
+        "source_context": [
+            {"line": 5, "code": "}"},
+            {"line": 6, "code": "int main() {"},
+            {"line": 7, "code": "    std::cout << add(1);"},
+            {"line": 8, "code": "    return 0;"},
+            {"line": 9, "code": "}"},
+        ],
+    }
+    result = analyze_simple_errors(diag)
+
+    assert result is not None, "Pipeline returned None — 'too few arguments' rule did not match"
+    _assert_unified_keys(result)
+    assert result["error_type"] == "WRONG_ARGUMENTS"
+    assert result["analysis_mode"] == "deterministic"
+    assert "too few arguments to function" in result["compiler_message"]
+    assert result["evidence"]["line"] == 7
+    assert result["evidence"]["code"] == "    std::cout << add(1);"
+
+
+def test_wrong_arguments_too_many():
+    """GCC emits 'too many arguments to function' for arity over-supply."""
+    diag = {
+        "file": "temp.cpp",
+        "line": 3,
+        "column": 5,
+        "severity": "error",
+        "message": "too many arguments to function 'void greet()'",
+        "source_context": [
+            {"line": 1, "code": "void greet() {}"},
+            {"line": 2, "code": "int main() {"},
+            {"line": 3, "code": '    greet("hello");'},
+            {"line": 4, "code": "}"},
+        ],
+    }
+    result = analyze_simple_errors(diag)
+
+    assert result is not None, "Pipeline returned None — 'too many arguments' rule did not match"
+    _assert_unified_keys(result)
+    assert result["error_type"] == "WRONG_ARGUMENTS"
+    assert result["analysis_mode"] == "deterministic"
+    assert "too many arguments to function" in result["compiler_message"]
+    assert result["evidence"]["line"] == 3
+    assert result["evidence"]["code"] == '    greet("hello");'
+
+
 def test_missing_include():
     diag = {
         "normalized": (

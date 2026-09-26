@@ -117,6 +117,46 @@ _RULES = [
         ),
     },
     {
+        "needle": "too few arguments to function",
+        "error_type": "WRONG_ARGUMENTS",
+        "compiler_explanation": (
+            "The function call provides fewer arguments than the function "
+            "declaration requires."
+        ),
+        "source_explanation": (
+            "The function is called with too few arguments. One or more "
+            "required parameters have not been supplied."
+        ),
+        "what_to_check": (
+            "Compare the call site with the function declaration: count the "
+            "number of parameters and ensure all required ones are provided."
+        ),
+        "suggestion": (
+            "Add the missing argument(s) to the function call to match the "
+            "function signature."
+        ),
+    },
+    {
+        "needle": "too many arguments to function",
+        "error_type": "WRONG_ARGUMENTS",
+        "compiler_explanation": (
+            "The function call provides more arguments than the function "
+            "declaration accepts."
+        ),
+        "source_explanation": (
+            "The function is called with too many arguments. Extra values are "
+            "being passed that the function does not have parameters for."
+        ),
+        "what_to_check": (
+            "Compare the call site with the function declaration: count the "
+            "number of parameters and remove the extra argument(s)."
+        ),
+        "suggestion": (
+            "Remove the extra argument(s) from the function call to match the "
+            "function signature."
+        ),
+    },
+    {
         "needle": "is not a member of 'std'",
         "error_type": "MISSING_INCLUDE",
         "compiler_explanation": (
