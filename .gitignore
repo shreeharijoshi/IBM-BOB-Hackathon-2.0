@@ -118,3 +118,25 @@ build/
 # DO NOT REMOVE ABOVE PATTERNS
 # Add project-specific patterns below
 # ============================================
+# ============================================
+# CONTEXT DIAGNOSTIC PROJECT-SPECIFIC
+# ============================================
+
+# Python/FastAPI test and runtime artifacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.pid
+*.sqlite3
+
+# Frontend/Vite artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Local env variants
+.envrc
+.env.test
