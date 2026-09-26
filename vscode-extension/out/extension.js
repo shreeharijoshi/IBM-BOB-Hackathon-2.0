@@ -2,17 +2,17 @@
 /**
  * C++ Diagnostic — VS Code extension entry point.
  *
- * Registers the "Diagnose C++" command.  When invoked, the extension:
- *   1. Resolves the active C++ editor.
- *   2. Saves the file (so the Python adapter reads the current content).
- *   3. Spawns `python backend/diagnose.py --file <path>` from the workspace root.
- *   4. Parses the JSON result written to stdout by the adapter.
- *   5. Formats and displays the diagnosis in a dedicated Output Channel.
+ * When the "Diagnose C++" command is invoked the extension:
+ *   1. Resolves the active C++ editor and saves if dirty.
+ *   2. Spawns `python backend/diagnose.py --file <path>`.
+ *   3. Parses the JSON result from the adapter.
+ *   4. Applies results through three VS Code presentation layers:
+ *        a. DiagnosticCollection  → Problems panel + editor squiggly underline
+ *        b. TextEditorDecorationType → subtle background highlight on evidence line
+ *        c. HoverProvider         → full plain-language explanation on hover
+ *   5. Writes the same information to the Output Channel as a readable fallback.
  *
- * All three outcome states are handled:
- *   • "clean"  — compilation succeeded with no errors.
- *   • "ok"     — first compiler error analysed and explained.
- *   • "error"  — infrastructure failure (GCC missing, timeout, unreadable file).
+ * On "clean" or "error" all previous decorations/diagnostics are cleared.
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -53,25 +53,55 @@ exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
 const cp = __importStar(require("child_process"));
 const path = __importStar(require("path"));
-// A single output channel shared across all invocations.
+// ---------------------------------------------------------------------------
+// Module-level state (one set per extension lifetime)
+// ---------------------------------------------------------------------------
 let outputChannel;
+let diagnosticCollection;
+/** Decoration type for the evidence-line highlight.  Created once. */
+let decorationType;
+/**
+ * The last successful diagnosis keyed by file URI string.
+ * The hover provider reads from this map.
+ */
+const lastDiagnosis = new Map();
+// ---------------------------------------------------------------------------
+// Lazy accessors
+// ---------------------------------------------------------------------------
 function getChannel() {
     if (!outputChannel) {
         outputChannel = vscode.window.createOutputChannel("C++ Diagnostic");
     }
     return outputChannel;
 }
+function getDiagnosticCollection() {
+    if (!diagnosticCollection) {
+        diagnosticCollection = vscode.languages.createDiagnosticCollection("cppDiagnostic");
+    }
+    return diagnosticCollection;
+}
+function getDecorationType() {
+    if (!decorationType) {
+        decorationType = vscode.window.createTextEditorDecorationType({
+            // Subtle amber background on the evidence line; visible in both themes.
+            backgroundColor: new vscode.ThemeColor("diffEditor.insertedLineBackground"),
+            isWholeLine: true,
+            overviewRulerColor: new vscode.ThemeColor("editorWarning.foreground"),
+            overviewRulerLane: vscode.OverviewRulerLane.Right,
+        });
+    }
+    return decorationType;
+}
 // ---------------------------------------------------------------------------
-// Helpers
+// Helpers: repository root
 // ---------------------------------------------------------------------------
-/** Return the absolute path to the repository root (one level above the
- *  extension directory so `backend/diagnose.py` is resolvable). */
+/** One level above vscode-extension/ */
 function repoRoot(context) {
-    // The extension lives at  <repo>/vscode-extension/
-    // so __dirname at runtime is  <repo>/vscode-extension/out/
     return path.resolve(context.extensionPath, "..");
 }
-/** Render a clean-compile message. */
+// ---------------------------------------------------------------------------
+// Helpers: Output Channel rendering (fallback / full-text view)
+// ---------------------------------------------------------------------------
 function renderClean(filePath) {
     const name = path.basename(filePath);
     return [
@@ -80,7 +110,6 @@ function renderClean(filePath) {
         "─".repeat(60),
     ].join("\n");
 }
-/** Render a full diagnosis. */
 function renderDiagnosis(d, filePath) {
     const name = path.basename(filePath);
     const modeTag = d.analysis_mode === "deterministic" ? "[rule-based]" : "[Bob AI]";
@@ -107,7 +136,6 @@ function renderDiagnosis(d, filePath) {
     lines.push("", "  WHAT TO CHECK", `    ${d.what_to_check}`, "", "  SUGGESTION", `    ${d.suggestion}`, "─".repeat(60));
     return lines.join("\n");
 }
-/** Render an infrastructure / adapter error. */
 function renderError(message) {
     return [
         "─".repeat(60),
@@ -117,6 +145,46 @@ function renderError(message) {
         "─".repeat(60),
     ].join("\n");
 }
+// ---------------------------------------------------------------------------
+// VS Code Problems panel integration
+// ---------------------------------------------------------------------------
+/**
+ * Push one vscode.Diagnostic for the first error.
+ *
+ * GCC evidence.line is 1-based; VS Code Range is 0-based.
+ * The range covers the whole flagged line so the squiggly is always visible.
+ */
+function applyVscodeDiagnostic(uri, d) {
+    const collection = getDiagnosticCollection();
+    collection.clear();
+    const evidenceLine = d.evidence.line != null ? d.evidence.line - 1 : 0;
+    // Highlight the full line (col 0 → large col).
+    const range = new vscode.Range(evidenceLine, 0, evidenceLine, 9999);
+    const modeTag = d.analysis_mode === "deterministic" ? "[rule-based]" : "[Bob AI]";
+    // Primary message shown in Problems panel and inline.
+    const message = `[${d.error_type}] ${d.compiler_message}  —  ${d.compiler_explanation}  ${modeTag}`;
+    const diag = new vscode.Diagnostic(range, message, vscode.DiagnosticSeverity.Error);
+    diag.source = "C++ Diagnostic";
+    // Related information: suggestion, so it appears in the Problems detail.
+    diag.relatedInformation = [
+        new vscode.DiagnosticRelatedInformation(new vscode.Location(uri, range), `Suggestion: ${d.suggestion}`),
+    ];
+    collection.set(uri, [diag]);
+}
+// ---------------------------------------------------------------------------
+// Editor decoration (evidence-line highlight)
+// ---------------------------------------------------------------------------
+function applyDecoration(editor, d) {
+    const evidenceLine = d.evidence.line != null ? d.evidence.line - 1 : 0;
+    const range = new vscode.Range(evidenceLine, 0, evidenceLine, 9999);
+    editor.setDecorations(getDecorationType(), [{ range }]);
+}
+function clearDecorations(editor) {
+    editor.setDecorations(getDecorationType(), []);
+}
+// ---------------------------------------------------------------------------
+// Core: invoke the Python adapter
+// ---------------------------------------------------------------------------
 function runAdapter(filePath, rootDir, python) {
     return new Promise((resolve) => {
         const args = [
@@ -149,8 +217,7 @@ function runAdapter(filePath, rootDir, python) {
                 return;
             }
             try {
-                const parsed = JSON.parse(raw);
-                resolve(parsed);
+                resolve(JSON.parse(raw));
             }
             catch {
                 resolve({
@@ -176,41 +243,122 @@ async function runDiagnose(context) {
         vscode.window.showWarningMessage("C++ Diagnostic: active file is not a C++ source file (.cpp / .cc / .cxx).");
         return;
     }
-    // Save so the adapter reads the latest version from disk.
     if (doc.isDirty) {
         await doc.save();
     }
     const channel = getChannel();
-    channel.show(true); // reveal without stealing focus
+    channel.show(true);
     channel.appendLine(`\nDiagnosing ${path.basename(doc.fileName)} …`);
     const cfg = vscode.workspace.getConfiguration("cppDiagnostic");
     const python = cfg.get("pythonPath") ?? "python";
     const root = repoRoot(context);
     const result = await runAdapter(doc.fileName, root, python);
+    const uri = doc.uri;
+    const uriKey = uri.toString();
     channel.clear();
     switch (result.status) {
         case "clean":
+            // Clear all previous markers.
+            getDiagnosticCollection().delete(uri);
+            clearDecorations(editor);
+            lastDiagnosis.delete(uriKey);
             channel.appendLine(renderClean(doc.fileName));
             break;
-        case "ok":
-            channel.appendLine(renderDiagnosis(result.diagnosis, doc.fileName));
+        case "ok": {
+            const d = result.diagnosis;
+            lastDiagnosis.set(uriKey, d);
+            // 1. Problems panel + squiggly underline.
+            applyVscodeDiagnostic(uri, d);
+            // 2. Evidence-line background highlight.
+            applyDecoration(editor, d);
+            // 3. Output channel full-text (fallback / readable summary).
+            channel.appendLine(renderDiagnosis(d, doc.fileName));
             break;
+        }
         case "error":
+            getDiagnosticCollection().delete(uri);
+            clearDecorations(editor);
+            lastDiagnosis.delete(uriKey);
             channel.appendLine(renderError(result.message));
             vscode.window.showErrorMessage(`C++ Diagnostic: ${result.message}`);
             break;
     }
 }
 // ---------------------------------------------------------------------------
+// Hover provider — explains the error when the user hovers over flagged line
+// ---------------------------------------------------------------------------
+/**
+ * Returns a Markdown hover when the cursor is on the evidence line of the
+ * last diagnosis for that document.
+ */
+function buildHoverProvider() {
+    return {
+        provideHover(document, position) {
+            const d = lastDiagnosis.get(document.uri.toString());
+            if (!d) {
+                return undefined;
+            }
+            const evidenceLine = d.evidence.line != null ? d.evidence.line - 1 : 0;
+            if (position.line !== evidenceLine) {
+                return undefined;
+            }
+            const modeTag = d.analysis_mode === "deterministic" ? "rule-based" : "Bob AI";
+            const md = new vscode.MarkdownString(undefined, true);
+            md.isTrusted = false;
+            md.appendMarkdown(`### C++ Diagnostic — \`${d.error_type}\` *(${modeTag})*\n\n`);
+            md.appendMarkdown(`**Compiler message**\n\n`);
+            md.appendCodeblock(d.compiler_message, "text");
+            md.appendMarkdown(`**What the compiler means**\n\n${d.compiler_explanation}\n\n`);
+            md.appendMarkdown(`**Source pattern**\n\n${d.source_explanation}\n\n`);
+            if (d.evidence.code) {
+                md.appendMarkdown(`**Evidence** *(line ${d.evidence.line})*\n\n`);
+                md.appendCodeblock(d.evidence.code.trim(), "cpp");
+            }
+            md.appendMarkdown(`**What to check**\n\n${d.what_to_check}\n\n`);
+            md.appendMarkdown(`**Suggestion**\n\n${d.suggestion}`);
+            const range = new vscode.Range(evidenceLine, 0, evidenceLine, 9999);
+            return new vscode.Hover(md, range);
+        },
+    };
+}
+// ---------------------------------------------------------------------------
 // Extension lifecycle
 // ---------------------------------------------------------------------------
 function activate(context) {
-    const disposable = vscode.commands.registerCommand("cppDiagnostic.diagnose", () => runDiagnose(context));
-    context.subscriptions.push(disposable);
+    // Register the main command.
+    context.subscriptions.push(vscode.commands.registerCommand("cppDiagnostic.diagnose", () => runDiagnose(context)));
+    // Hover provider for C++ files.
+    context.subscriptions.push(vscode.languages.registerHoverProvider([
+        { language: "cpp" },
+        { pattern: "**/*.cpp" },
+        { pattern: "**/*.cc" },
+        { pattern: "**/*.cxx" },
+    ], buildHoverProvider()));
+    // Clear markers when the document is closed or modified.
+    context.subscriptions.push(vscode.workspace.onDidCloseTextDocument((doc) => {
+        getDiagnosticCollection().delete(doc.uri);
+        lastDiagnosis.delete(doc.uri.toString());
+    }));
+    context.subscriptions.push(vscode.workspace.onDidChangeTextDocument((event) => {
+        const uriKey = event.document.uri.toString();
+        if (!lastDiagnosis.has(uriKey)) {
+            return;
+        }
+        // Source changed — stale diagnostics would be misleading; clear them.
+        getDiagnosticCollection().delete(event.document.uri);
+        lastDiagnosis.delete(uriKey);
+        // Clear the decoration on any visible editor showing this document.
+        for (const editor of vscode.window.visibleTextEditors) {
+            if (editor.document.uri.toString() === uriKey) {
+                clearDecorations(editor);
+            }
+        }
+    }));
 }
 function deactivate() {
-    if (outputChannel) {
-        outputChannel.dispose();
-    }
+    outputChannel?.dispose();
+    diagnosticCollection?.dispose();
+    decorationType?.dispose();
+    lastDiagnosis.clear();
 }
 //# sourceMappingURL=extension.js.map
