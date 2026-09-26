@@ -9,4 +9,4 @@ from backend.diagnostics import analyze_simple_errors
 def test_analyze_simple_errors_known_case():
     result = analyze_simple_errors({"normalized": "error: expected ';' before '}'"})
     assert result is not None
-    assert result["source"] == "deterministic"
+    assert result["analysis_mode"] == "deterministic"
