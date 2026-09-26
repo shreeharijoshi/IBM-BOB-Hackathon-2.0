@@ -21,6 +21,23 @@ _RULES = [
         "suggestion": "Add a semicolon (';') at the end of the incomplete statement.",
     },
     {
+        "needle": "expected ',' or ';'",
+        "error_type": "MISSING_SEMICOLON",
+        "compiler_explanation": (
+            "The compiler reached a token it did not expect because a "
+            "semicolon is missing at the end of the previous statement."
+        ),
+        "source_explanation": (
+            "A statement on the line before the flagged location is not "
+            "terminated with a semicolon (';')."
+        ),
+        "what_to_check": (
+            "Look at the line immediately before the one the compiler flagged "
+            "and confirm it ends with a semicolon."
+        ),
+        "suggestion": "Add a semicolon (';') at the end of the incomplete statement.",
+    },
+    {
         "needle": "was not declared in this scope",
         "error_type": "UNDEFINED_VARIABLE",
         "compiler_explanation": (

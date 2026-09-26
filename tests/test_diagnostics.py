@@ -54,6 +54,31 @@ def test_missing_semicolon():
     assert result["evidence"]["code"] == "int x = 10"
 
 
+def test_missing_semicolon_gcc_variant():
+    """GCC message 'expected ',' or ';' before ...' must match MISSING_SEMICOLON."""
+    diag = {
+        "file": "temp.cpp",
+        "line": 4,
+        "column": 5,
+        "severity": "error",
+        "message": "expected ',' or ';' before 'std'",
+        "source_context": [
+            {"line": 3, "code": "int main() {"},
+            {"line": 4, "code": "    int x = 10"},
+            {"line": 5, "code": "    std::cout << x;"},
+        ],
+    }
+    result = analyze_simple_errors(diag)
+
+    assert result is not None, "Pipeline returned None — rule did not match"
+    _assert_unified_keys(result)
+    assert result["error_type"] == "MISSING_SEMICOLON"
+    assert result["analysis_mode"] == "deterministic"
+    assert "expected ',' or ';' before 'std'" in result["compiler_message"]
+    assert result["evidence"]["line"] == 4
+    assert result["evidence"]["code"] == "    int x = 10"
+
+
 def test_undefined_variable():
     diag = {
         "normalized": "main.cpp:2:12: error: 'value' was not declared in this scope",
