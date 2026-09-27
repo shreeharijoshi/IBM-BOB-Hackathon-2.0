@@ -832,3 +832,76 @@ class TestBobFallback:
             result = analyze_with_bob({"normalized": msg})
             assert result is not None
             assert isinstance(result, dict)
+
+    def test_diag_line_not_in_context_window_preserves_compiler_line(self):
+        """Regression: GCC line 3 must not become line 5 via the bob fallback.
+
+        When diag_line is absent from the source_context window (e.g. the
+        window was clamped or shifted), the old for...else fallback replaced
+        evidence.line with source_context[0].line — the first entry of the
+        context window — instead of preserving the compiler's reported line.
+
+        For a 5-line file where GCC reports line 3 but the context window only
+        contains lines 4 and 5, the old code would return evidence.line=4.
+        For a window containing lines 1–5 where GCC reported line 5 (closing
+        brace '}'), the old code would return evidence.line=1.
+
+        After the fix, evidence.line must always equal the compiler's reported
+        line number regardless of what the context window contains.
+        """
+        # Scenario: diag_line=3, but the context window happens not to include
+        # line 3 (e.g. clamped to lines 4-5 due to a hypothetical edge case).
+        # The fix must preserve diag_line=3, not fall back to source_context[0].line=4.
+        diag_no_match = {
+            "line": 3,
+            "source_context": [
+                {"line": 4, "code": "    return 0;"},
+                {"line": 5, "code": "}"},
+            ],
+            "message": "some unknown error XYZ",
+        }
+        result = analyze_with_bob(diag_no_match)
+        assert result is not None
+        ev = result["evidence"]
+        assert ev["line"] == 3, (
+            f"evidence.line must be the compiler's line (3), "
+            f"not source_context[0].line (4); got {ev['line']}"
+        )
+        assert ev["code"] == "", "No unrelated source text should be used"
+
+    def test_diag_line_in_context_window_uses_matching_entry(self):
+        """When diag_line IS present in the context window, use that entry's code."""
+        diag_match = {
+            "line": 3,
+            "source_context": [
+                {"line": 1, "code": "int main(){"},
+                {"line": 2, "code": "    int a=0;"},
+                {"line": 3, "code": "    cout<<a;"},
+                {"line": 4, "code": "    return 0;"},
+                {"line": 5, "code": "}"},
+            ],
+            "message": "some unknown error XYZ",
+        }
+        result = analyze_with_bob(diag_match)
+        assert result is not None
+        ev = result["evidence"]
+        assert ev["line"] == 3
+        assert ev["code"] == "    cout<<a;"
+
+    def test_diag_line_none_with_context_returns_none_line(self):
+        """When diag_line is None, evidence.line must be None (not context[0].line)."""
+        diag = {
+            "line": None,
+            "source_context": [
+                {"line": 1, "code": "int main(){"},
+                {"line": 2, "code": "}"},
+            ],
+            "message": "unknown",
+        }
+        result = analyze_with_bob(diag)
+        assert result is not None
+        assert result["evidence"]["line"] is None, (
+            "evidence.line must be None when diag_line is None, "
+            f"not source_context[0].line; got {result['evidence']['line']}"
+        )
+
