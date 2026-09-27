@@ -5,6 +5,7 @@ deterministic.  The only tests that require a real GCC installation are
 clearly marked with ``@pytest.mark.integration``.
 """
 
+import json
 import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -540,3 +541,40 @@ def test_integration_missing_semicolon():
     assert result["status"] == "ok"
     assert result["diagnosis"]["error_type"] == "MISSING_SEMICOLON"
     assert result["diagnosis"]["analysis_mode"] == "deterministic"
+    assert "root_cause_location" in result["diagnosis"]
+    assert "compiler_location" in result["diagnosis"]
+
+
+def test_diagnose_root_cause_location_resolves_previous_line():
+    """Missing semicolon flagged before std points root cause to line 1."""
+    stderr = "main.cpp:2:5: error: expected ';' before 'std'\n"
+    with patch("backend.diagnose.run_compiler", return_value=_compiler_result(stderr)):
+        source = "int x = 10\nstd::cout << x;\n"
+        result = diagnose(source)
+
+    _assert_ok(result)
+    d = result["diagnosis"]
+    assert d["compiler_location"]["line"] == 2
+    assert d["root_cause_location"]["line"] == 1
+    assert d["root_cause_location"]["source"] == "int x = 10"
+
+
+def test_cli_check_code_output(capsys, monkeypatch, tmp_path):
+    """Running CLI with --check-code produces valid JSON output without crashing."""
+    cpp_file = tmp_path / "sample.cpp"
+    cpp_file.write_text("int main() { return 0; }", encoding="utf-8")
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["diagnose.py", "--file", str(cpp_file), "--check-code", "--gemini-enabled", "false"],
+    )
+
+    from backend.diagnose import main
+    main()
+
+    captured = capsys.readouterr()
+    assert captured.out.strip()
+    data = json.loads(captured.out.strip())
+    assert data["status"] == "disabled"
+

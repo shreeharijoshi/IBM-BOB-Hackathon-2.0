@@ -216,3 +216,35 @@ def test_note_only_compiler_output_returns_clean():
     assert data["status"] == "clean", (
         f"Note-only output must not produce an error diagnosis; got: {data}"
     )
+
+
+def test_diagnose_includes_locations_and_confidence():
+    """Verify that diagnose response carries compiler_location, root_cause_location, and confidence."""
+    payload = {
+        "source_code": "int main() {\n    int x = 10\n    return 0;\n}",
+        "compiler_output": "main.cpp:3:5: error: expected ';' before 'return'",
+    }
+    response = client.post("/diagnose", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    d = data["diagnosis"]
+    assert "compiler_location" in d
+    assert d["compiler_location"]["line"] == 3
+    assert "root_cause_location" in d
+    assert d["root_cause_location"]["line"] == 2
+    assert d["confidence"] == 1.0
+
+
+def test_check_code_endpoint_disabled_when_no_key():
+    """Verify /check-code returns disabled status gracefully when no key is provided."""
+    payload = {
+        "source_code": "int main() { return 0; }",
+        "gemini_api_key": "",
+    }
+    response = client.post("/check-code", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "disabled"
+    assert "not configured" in data["message"]
+

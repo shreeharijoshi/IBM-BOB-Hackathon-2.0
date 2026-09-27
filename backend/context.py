@@ -2,6 +2,8 @@
 
 from typing import TypedDict
 
+from backend.location import resolve_root_cause
+
 
 class SourceLine(TypedDict):
     """A single source line with its 1-based line number."""
@@ -74,4 +76,7 @@ def enrich_context(diagnostic: dict, source_code: str) -> dict:
     # Store the actual source length so downstream code can detect line-number
     # mismatches (compiler line > source length) without needing source_code.
     result["source_line_count"] = len(source_code.splitlines())
+    result["root_cause_location"] = resolve_root_cause(
+        result, error_type="", source_code=source_code
+    )
     return result

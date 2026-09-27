@@ -1,8 +1,8 @@
 {
   "name": "cpp-diagnostic",
   "displayName": "C++ Diagnostic",
-  "description": "Analyze C++ compiler errors and receive context-aware explanations directly inside VS Code.",
-  "version": "0.2.0",
+  "description": "Analyze C++ compiler errors with precise root-cause locations and Gemini AI code review directly inside VS Code.",
+  "version": "0.3.0",
   "publisher": "ibm-bob-hackathon",
   "repository": {
     "type": "git",
@@ -22,7 +22,9 @@
     "Clang",
     "diagnostic",
     "compiler",
-    "error"
+    "error",
+    "gemini",
+    "ai"
   ],
   "activationEvents": [],
   "main": "./out/extension.js",
@@ -39,6 +41,11 @@
         "category": "C++ Diagnostic"
       },
       {
+        "command": "cppDiagnostic.checkCode",
+        "title": "Context Diagnostic: Check Code with Gemini",
+        "category": "C++ Diagnostic"
+      },
+      {
         "command": "cppDiagnostic.clearDiagnostics",
         "title": "Diagnose C++: Clear Diagnostics",
         "category": "C++ Diagnostic"
@@ -46,6 +53,16 @@
       {
         "command": "cppDiagnostic.showPanel",
         "title": "Diagnose C++: Show Explanation Panel",
+        "category": "C++ Diagnostic"
+      },
+      {
+        "command": "cppDiagnostic.setGeminiApiKey",
+        "title": "Diagnose C++: Set Gemini API Key",
+        "category": "C++ Diagnostic"
+      },
+      {
+        "command": "cppDiagnostic.clearGeminiApiKey",
+        "title": "Diagnose C++: Clear Gemini API Key",
         "category": "C++ Diagnostic"
       }
     ],
@@ -58,13 +75,18 @@
         },
         {
           "when": "resourceExtname == .cpp || resourceExtname == .cc || resourceExtname == .cxx",
-          "command": "cppDiagnostic.analyzeFile",
+          "command": "cppDiagnostic.checkCode",
           "group": "navigation@2"
         },
         {
           "when": "resourceExtname == .cpp || resourceExtname == .cc || resourceExtname == .cxx",
-          "command": "cppDiagnostic.clearDiagnostics",
+          "command": "cppDiagnostic.analyzeFile",
           "group": "navigation@3"
+        },
+        {
+          "when": "resourceExtname == .cpp || resourceExtname == .cc || resourceExtname == .cxx",
+          "command": "cppDiagnostic.clearDiagnostics",
+          "group": "navigation@4"
         }
       ]
     },
@@ -73,6 +95,12 @@
         "command": "cppDiagnostic.diagnose",
         "key": "ctrl+shift+d",
         "mac": "cmd+shift+d",
+        "when": "editorTextFocus && (resourceExtname == .cpp || resourceExtname == .cc || resourceExtname == .cxx)"
+      },
+      {
+        "command": "cppDiagnostic.checkCode",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g",
         "when": "editorTextFocus && (resourceExtname == .cpp || resourceExtname == .cc || resourceExtname == .cxx)"
       },
       {
@@ -99,6 +127,31 @@
           "type": "boolean",
           "default": false,
           "description": "Automatically analyze C++ files when saved."
+        },
+        "cppDiagnostic.geminiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Optional Google Gemini API key for AI code analysis and complex error resolution. If empty, uses GEMINI_API_KEY environment variable if present. Deterministic rules always work without a key."
+        },
+        "cppDiagnostic.geminiModel": {
+          "type": "string",
+          "default": "gemini-2.5-flash",
+          "description": "Google Gemini model to use (default: gemini-2.5-flash)."
+        },
+        "cppDiagnostic.geminiEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Gemini AI features (falls back to offline rules when disabled or unconfigured)."
+        },
+        "cppDiagnostic.geminiTimeout": {
+          "type": "number",
+          "default": 15,
+          "description": "Timeout in seconds for Gemini requests."
+        },
+        "cppDiagnostic.preferGemini": {
+          "type": "boolean",
+          "default": true,
+          "description": "When a Gemini API key is provided, use Gemini AI-driven explanations for all diagnostics. Falls back to offline rules if unconfigured or unavailable."
         }
       }
     }

@@ -143,3 +143,5 @@ frontend/.vite/
 
 # VS Code extension -- backend copy created by vscode:prepublish
 vscode-extension/backend/
+*.vsix
+
