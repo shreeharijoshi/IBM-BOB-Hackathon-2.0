@@ -1,5 +1,9 @@
 # C++ Diagnostic — VS Code Extension
 
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/shreeharijoshi/IBM-BOB-Hackathon-2.0)
+
+> **🚀 Live Web Testing:** Click the badge above or visit [https://codespaces.new/shreeharijoshi/IBM-BOB-Hackathon-2.0](https://codespaces.new/shreeharijoshi/IBM-BOB-Hackathon-2.0) to launch an instant in-browser VS Code environment with this extension pre-installed and ready to test!
+
 A production-ready VS Code extension that analyzes C++ compiler errors (GCC and Apple Clang) and provides plain-language, context-aware explanations directly inside the editor.
 
 ## Features
