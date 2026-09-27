@@ -1,12 +1,40 @@
-"""Bob/AI fallback stub for complex or unrecognised compiler errors."""
+"""Generic fallback analysis for compiler errors not matched by deterministic rules.
+
+Works without any API key or external service. Provides a helpful, structured
+generic explanation based on the raw compiler message text.
+"""
+
+import re
+
+
+# Map of common GCC/Clang message fragments to friendly category hints
+_HINT_PATTERNS = [
+    (re.compile(r"template", re.I), "This looks like a template-related error."),
+    (re.compile(r"namespace", re.I), "This may involve a namespace or missing #include."),
+    (re.compile(r"overload", re.I), "This may be an overload resolution failure."),
+    (re.compile(r"virtual", re.I), "This may involve a virtual function or polymorphism."),
+    (re.compile(r"const", re.I), "This may involve a const correctness issue."),
+    (re.compile(r"reference|lvalue|rvalue", re.I), "This may involve a reference or value category issue."),
+    (re.compile(r"pointer|dereference", re.I), "This may involve a pointer operation."),
+    (re.compile(r"cast|conversion|convert", re.I), "This may involve a type conversion."),
+    (re.compile(r"inherit|base class|derived", re.I), "This may involve inheritance."),
+    (re.compile(r"static|extern", re.I), "This may involve storage class or linkage."),
+    (re.compile(r"decltype|auto", re.I), "This may involve type deduction."),
+]
+
+
+def _build_hint(message: str) -> str:
+    for pattern, hint in _HINT_PATTERNS:
+        if pattern.search(message):
+            return hint
+    return "Review the compiler message carefully for specific clues."
 
 
 def analyze_with_bob(contextual_diagnostic: dict) -> dict:
-    """Return a stubbed unified diagnosis for errors not handled deterministically.
+    """Return a structured generic diagnosis for errors not handled deterministically.
 
-    Uses the same safe evidence-extraction approach as diagnostics.py:
-    prefer the source_context entry whose line matches the reported line,
-    fall back to the first context entry, then to bare line/empty code.
+    Never raises or returns None. Always returns a complete unified schema dict.
+    Works entirely without API keys or external services.
     """
     compiler_message = (
         contextual_diagnostic.get("normalized")
@@ -17,7 +45,8 @@ def analyze_with_bob(contextual_diagnostic: dict) -> dict:
     diag_line = contextual_diagnostic.get("line")
     source_context = contextual_diagnostic.get("source_context", [])
 
-    evidence = {"line": diag_line, "code": ""}
+    # Build evidence
+    evidence: dict = {"line": diag_line, "code": ""}
     if diag_line is not None and source_context:
         for entry in source_context:
             if entry.get("line") == diag_line:
@@ -30,27 +59,29 @@ def analyze_with_bob(contextual_diagnostic: dict) -> dict:
         first = source_context[0]
         evidence = {"line": first.get("line"), "code": first.get("code", "")}
 
+    hint = _build_hint(compiler_message)
+
     return {
         "error_type": "UNKNOWN",
         "analysis_mode": "ai",
         "compiler_message": compiler_message,
         "compiler_explanation": (
-            "This error could not be matched to a known pattern and requires "
-            "deeper analysis."
+            f"This error was not matched by a specific rule. {hint} "
+            "Read the full compiler message above for exact details."
         ),
         "source_explanation": (
-            "Bob AI analysis is pending for this error type. The error may "
-            "involve complex type interactions, templates, or project-specific "
-            "code patterns."
+            "The compiler found an issue in your code that requires closer inspection. "
+            "Check the flagged line and its context carefully."
         ),
         "evidence": evidence,
         "what_to_check": (
             "Review the flagged line and its surrounding context carefully. "
-            "Check for mismatched types, incorrect scoping, or missing "
-            "definitions."
+            "Check for mismatched types, incorrect scoping, missing definitions, "
+            "or unsatisfied template constraints."
         ),
         "suggestion": (
-            "Consult the compiler documentation for this error code, or ask "
-            "Bob for further guidance once AI integration is enabled."
+            "Read the full compiler message carefully — it often contains the specific "
+            "identifier, type, or location involved. Search for the error message online "
+            "or consult the C++ reference for the relevant feature."
         ),
     }

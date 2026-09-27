@@ -1,20 +1,51 @@
 {
   "name": "cpp-diagnostic",
   "displayName": "C++ Diagnostic",
-  "description": "Compile the active C++ file with GCC and explain the first error in plain language.",
-  "version": "0.1.0",
+  "description": "Analyze C++ compiler errors and receive context-aware explanations directly inside VS Code.",
+  "version": "0.2.0",
   "publisher": "ibm-bob-hackathon",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ibm-bob-hackathon/cpp-diagnostic"
+  },
+  "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other"],
+  "categories": [
+    "Other",
+    "Linters"
+  ],
+  "keywords": [
+    "C++",
+    "GCC",
+    "Clang",
+    "diagnostic",
+    "compiler",
+    "error"
+  ],
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "cppDiagnostic.diagnose",
-        "title": "Diagnose C++",
+        "title": "Diagnose C++: Explain Error",
+        "category": "C++ Diagnostic"
+      },
+      {
+        "command": "cppDiagnostic.analyzeFile",
+        "title": "Diagnose C++: Analyze File",
+        "category": "C++ Diagnostic"
+      },
+      {
+        "command": "cppDiagnostic.clearDiagnostics",
+        "title": "Diagnose C++: Clear Diagnostics",
+        "category": "C++ Diagnostic"
+      },
+      {
+        "command": "cppDiagnostic.showPanel",
+        "title": "Diagnose C++: Show Explanation Panel",
         "category": "C++ Diagnostic"
       }
     ],
@@ -23,7 +54,17 @@
         {
           "when": "resourceExtname == .cpp || resourceExtname == .cc || resourceExtname == .cxx",
           "command": "cppDiagnostic.diagnose",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "when": "resourceExtname == .cpp || resourceExtname == .cc || resourceExtname == .cxx",
+          "command": "cppDiagnostic.analyzeFile",
+          "group": "navigation@2"
+        },
+        {
+          "when": "resourceExtname == .cpp || resourceExtname == .cc || resourceExtname == .cxx",
+          "command": "cppDiagnostic.clearDiagnostics",
+          "group": "navigation@3"
         }
       ]
     },
@@ -33,6 +74,12 @@
         "key": "ctrl+shift+d",
         "mac": "cmd+shift+d",
         "when": "editorTextFocus && (resourceExtname == .cpp || resourceExtname == .cc || resourceExtname == .cxx)"
+      },
+      {
+        "command": "cppDiagnostic.clearDiagnostics",
+        "key": "ctrl+shift+k",
+        "mac": "cmd+shift+k",
+        "when": "resourceExtname == .cpp || resourceExtname == .cc || resourceExtname == .cxx"
       }
     ],
     "configuration": {
@@ -42,6 +89,16 @@
           "type": "string",
           "default": "python",
           "description": "Path to the Python interpreter used to run the diagnostic backend. Defaults to 'python' (uses the system PATH)."
+        },
+        "cppDiagnostic.backendUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Optional URL of a running backend server (e.g. http://localhost:8000). When set, the extension communicates via HTTP instead of spawning the Python CLI adapter."
+        },
+        "cppDiagnostic.autoAnalyzeOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically analyze C++ files when saved."
         }
       }
     }
@@ -54,6 +111,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.9.2",
     "typescript": "^5.3.0"
   }
 }

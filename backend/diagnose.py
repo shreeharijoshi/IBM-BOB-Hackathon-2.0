@@ -15,19 +15,30 @@ Output schema
 On clean compilation:
     {"status": "clean"}
 
-On one or more compiler errors (first error is analysed):
+On one or more compiler errors (ALL errors are fully analysed):
     {
         "status": "ok",
-        "diagnosis": {
-            "error_type":           str,   # e.g. "MISSING_SEMICOLON"
-            "analysis_mode":        str,   # "deterministic" | "ai"
-            "compiler_message":     str,
-            "compiler_explanation": str,
-            "source_explanation":   str,
-            "evidence":             {"line": int | null, "code": str},
-            "what_to_check":        str,
-            "suggestion":           str
-        }
+        "diagnosis": { ... },          # deep analysis of the first error
+        "diagnostics": [               # deep analysis of ALL errors
+            {
+                "error_type":           str,
+                "analysis_mode":        str,   # "deterministic" | "ai"
+                "compiler_message":     str,
+                "compiler_explanation": str,
+                "source_explanation":   str,
+                "evidence":             {"line": int | null, "code": str},
+                "what_to_check":        str,
+                "suggestion":           str,
+                "raw": {               # original parsed compiler diagnostic
+                    "file":     str,
+                    "line":     int,
+                    "column":   int,
+                    "severity": str,
+                    "message":  str
+                }
+            },
+            ...
+        ]
     }
 
 On infrastructure errors (GCC missing, timeout, unreadable file, …):
@@ -59,8 +70,30 @@ def _emit(payload: dict) -> None:
     sys.stdout.flush()
 
 
+def _analyse_one(error: dict, source_code: str) -> dict:
+    """Run the full context + rule pipeline on a single parsed error dict.
+
+    Returns the unified diagnosis dict with an extra 'raw' field carrying the
+    original compiler diagnostic fields (file, line, column, severity, message).
+    """
+    contextual = enrich_context(error, source_code)
+    diagnosis = analyze_simple_errors(contextual) or analyze_with_bob(contextual)
+    diagnosis["raw"] = {
+        "file": error.get("file", ""),
+        "line": error.get("line"),
+        "column": error.get("column"),
+        "severity": error.get("severity", "error"),
+        "message": error.get("message", ""),
+    }
+    return diagnosis
+
+
 def diagnose(source_code: str) -> dict:
     """Run the full pipeline on *source_code* and return the result dict.
+
+    Returns deep analysis for ALL compiler errors, not just the first.
+    The top-level 'diagnosis' key contains the first error's analysis for
+    backward compatibility. The 'diagnostics' list contains every error.
 
     Separated from I/O so tests can call it directly without spawning a process.
     """
@@ -71,19 +104,22 @@ def diagnose(source_code: str) -> dict:
     except GCCTimeoutError as exc:
         return {"status": "error", "message": str(exc)}
 
-    diagnostics = parse_compiler_output(result["stderr"])
+    parsed = parse_compiler_output(result["stderr"])
 
     # Only errors are actionable; skip warnings and notes.
-    errors = [d for d in diagnostics if d["severity"] in ("error", "fatal error")]
+    errors = [d for d in parsed if d["severity"] in ("error", "fatal error")]
 
     if not errors:
         return {"status": "clean"}
 
-    # Analyse the first error only — the VS Code prototype shows one at a time.
-    first = errors[0]
-    contextual = enrich_context(first, source_code)
-    diagnosis = analyze_simple_errors(contextual) or analyze_with_bob(contextual)
-    return {"status": "ok", "diagnosis": diagnosis}
+    # Deep-analyse every error.
+    diagnostics = [_analyse_one(err, source_code) for err in errors]
+
+    return {
+        "status": "ok",
+        "diagnosis": diagnostics[0],   # first error — backward compat
+        "diagnostics": diagnostics,    # all errors — full multi-error support
+    }
 
 
 def main() -> None:

@@ -252,26 +252,10 @@ def test_complex_error_example_file():
 # 8. Multiple diagnostics — only first error is reported
 # ---------------------------------------------------------------------------
 
-def test_multiple_errors_only_first_reported():
-    """When GCC emits more than one error, diagnose() must return the first.
+def test_multiple_errors_first_is_in_diagnosis():
+    """When GCC emits more than one error, 'diagnosis' (backward-compat) is the first.
     Stage tested: parse_compiler_output → filter errors → enrich_context → analyze.
     """
-    # Two independent errors: missing semicolon AND undefined variable
-    source = (
-        "int main() {\n"
-        "    int x = 10\n"          # line 2 — missing semicolon; GCC flags line 3
-        "    return undefined;\n"   # line 3 — undefined variable
-        "}\n"
-    )
-    result = diagnose(source)
-    _assert_ok(result)
-    # GCC will report the semicolon first; that must be what comes back
-    assert result["diagnosis"]["error_type"] == "MISSING_SEMICOLON"
-
-
-def test_multiple_errors_second_error_not_in_result():
-    """The diagnosis must not contain any reference to the second error's type
-    when the first error is a different type."""
     source = (
         "int main() {\n"
         "    int x = 10\n"
@@ -280,8 +264,55 @@ def test_multiple_errors_second_error_not_in_result():
     )
     result = diagnose(source)
     _assert_ok(result)
-    # Result should NOT be UNDEFINED_VARIABLE (that would be the second error)
-    assert result["diagnosis"]["error_type"] != "UNDEFINED_VARIABLE"
+    assert result["diagnosis"]["error_type"] == "MISSING_SEMICOLON"
+
+
+def test_multiple_errors_all_deeply_analysed():
+    """All errors have deep analysis in 'diagnostics' list.
+
+    Uses two genuinely independent errors (type mismatch + wrong arguments)
+    so both GCC and Apple Clang report both without cascade suppression.
+    """
+    source = (
+        "int add(int a, int b) { return a + b; }\n"
+        "int main() {\n"
+        '    int x = "hello";\n'   # TYPE_MISMATCH
+        "    return add(1);\n"     # WRONG_ARGUMENTS
+        "}\n"
+    )
+    result = diagnose(source)
+    _assert_ok(result)
+    assert "diagnostics" in result
+    assert len(result["diagnostics"]) >= 2
+    # Each has the full unified schema + raw
+    for d in result["diagnostics"]:
+        missing = _DIAGNOSIS_KEYS - d.keys()
+        assert not missing, f"Missing keys in diagnostics entry: {missing}"
+        assert "raw" in d
+        assert isinstance(d["raw"]["line"], int)
+
+    # Both errors are classified deterministically
+    types = {d["error_type"] for d in result["diagnostics"]}
+    assert "TYPE_MISMATCH" in types
+    assert "WRONG_ARGUMENTS" in types
+
+
+def test_diagnostics_raw_carries_exact_compiler_location():
+    """raw.line and raw.column in each diagnostics entry must match what GCC reported."""
+    source = (
+        "int add(int a, int b) { return a + b; }\n"
+        "int main() {\n"
+        '    int x = "hello";\n'
+        "    return add(1);\n"
+        "}\n"
+    )
+    result = diagnose(source)
+    _assert_ok(result)
+    for d in result["diagnostics"]:
+        raw = d["raw"]
+        assert raw["line"] is not None
+        assert raw["severity"] == "error"
+        assert isinstance(raw["message"], str) and len(raw["message"]) > 0
 
 
 # ---------------------------------------------------------------------------

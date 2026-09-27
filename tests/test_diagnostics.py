@@ -1,8 +1,33 @@
+"""Comprehensive tests for backend/diagnostics.py rule engine.
+
+Covers all rule categories with both GCC and Apple Clang message variants:
+  - Missing semicolons (multiple variants)
+  - Missing braces, parens, brackets
+  - Undefined variables (GCC + Clang)
+  - Undefined types
+  - Type mismatches (GCC + Clang variants)
+  - Wrong arguments (GCC + Clang variants)
+  - Missing includes (GCC + Clang variants)
+  - Undefined / undeclared functions
+  - Missing return values
+  - Class / member / access errors
+  - Pointer and reference errors
+  - Template errors
+  - Operator errors
+  - Redefinition
+  - Linker errors
+  - Syntax errors
+  - Rule priority and pattern specificity
+  - Evidence selection
+  - Bob fallback (analyze_with_bob)
+"""
+
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import pytest
 from backend.diagnostics import analyze_simple_errors
 from backend.bob import analyze_with_bob
 
@@ -23,288 +48,613 @@ _UNIFIED_KEYS = {
 
 
 def _assert_unified_keys(result: dict) -> None:
-    """Assert that all required unified output keys are present."""
     missing = _UNIFIED_KEYS - result.keys()
     assert not missing, f"Missing unified output keys: {missing}"
 
 
-# ---------------------------------------------------------------------------
-# Deterministic rule tests
-# ---------------------------------------------------------------------------
-
-def test_missing_semicolon():
-    diag = {
-        "normalized": "main.cpp:4:5: error: expected ';' before 'std'",
-        "line": 4,
-        "source_context": [
-            {"line": 3, "code": "int main() {"},
-            {"line": 4, "code": "int x = 10"},
-            {"line": 5, "code": "std::cout << x;"},
-        ],
+def _make_diag(message: str, line: int = 1, code: str = "test code") -> dict:
+    return {
+        "normalized": message,
+        "line": line,
+        "source_context": [{"line": line, "code": code}],
     }
-    result = analyze_simple_errors(diag)
 
-    assert result is not None
+
+def _check(message: str, expected_type: str, line: int = 1, code: str = "test code") -> dict:
+    diag = _make_diag(message, line, code)
+    result = analyze_simple_errors(diag)
+    assert result is not None, f"No rule matched for: {message!r}"
     _assert_unified_keys(result)
-    assert result["error_type"] == "MISSING_SEMICOLON"
+    assert result["error_type"] == expected_type, (
+        f"Expected {expected_type!r}, got {result['error_type']!r} for: {message!r}"
+    )
     assert result["analysis_mode"] == "deterministic"
-    assert "expected ';'" in result["compiler_message"]
-    # Evidence must select line 4, not line 3 (first entry)
-    assert result["evidence"]["line"] == 4
-    assert result["evidence"]["code"] == "int x = 10"
+    return result
 
 
-def test_missing_semicolon_gcc_variant():
-    """GCC message 'expected ',' or ';' before ...' must match MISSING_SEMICOLON."""
-    diag = {
-        "file": "temp.cpp",
-        "line": 4,
-        "column": 5,
-        "severity": "error",
-        "message": "expected ',' or ';' before 'std'",
-        "source_context": [
-            {"line": 3, "code": "int main() {"},
-            {"line": 4, "code": "    int x = 10"},
-            {"line": 5, "code": "    std::cout << x;"},
-        ],
-    }
-    result = analyze_simple_errors(diag)
+# ===========================================================================
+# MISSING SEMICOLON — GCC and Clang variants
+# ===========================================================================
 
-    assert result is not None, "Pipeline returned None — rule did not match"
-    _assert_unified_keys(result)
-    assert result["error_type"] == "MISSING_SEMICOLON"
-    assert result["analysis_mode"] == "deterministic"
-    assert "expected ',' or ';' before 'std'" in result["compiler_message"]
-    assert result["evidence"]["line"] == 4
-    assert result["evidence"]["code"] == "    int x = 10"
+class TestMissingSemicolon:
 
+    def test_gcc_expected_semicolon(self):
+        _check("main.cpp:4:5: error: expected ';' before 'return'", "MISSING_SEMICOLON")
 
-def test_undefined_variable():
-    diag = {
-        "normalized": "main.cpp:2:12: error: 'value' was not declared in this scope",
-        "line": 2,
-        "source_context": [
-            {"line": 1, "code": "int main() {"},
-            {"line": 2, "code": "    return value;"},
-        ],
-    }
-    result = analyze_simple_errors(diag)
+    def test_gcc_expected_comma_or_semicolon(self):
+        _check("main.cpp:4:5: error: expected ',' or ';' before 'std'", "MISSING_SEMICOLON")
 
-    assert result is not None
-    _assert_unified_keys(result)
-    assert result["error_type"] == "UNDEFINED_VARIABLE"
-    assert result["analysis_mode"] == "deterministic"
-    assert "was not declared in this scope" in result["compiler_message"]
-    assert result["evidence"]["line"] == 2
-    assert result["evidence"]["code"] == "    return value;"
+    def test_clang_expected_semicolon_at_end_of_declaration(self):
+        _check("main.cpp:2:15: error: expected ';' at end of declaration", "MISSING_SEMICOLON")
+
+    def test_expected_semicolon_after_return(self):
+        _check("main.cpp:3:8: error: expected ';' after return statement", "MISSING_SEMICOLON")
+
+    def test_expected_semicolon_after_expression(self):
+        _check("main.cpp:5:10: error: expected ';' after expression", "MISSING_SEMICOLON")
+
+    def test_expected_semicolon_before_closing_brace(self):
+        _check("main.cpp:6:1: error: expected ';' before '}'", "MISSING_SEMICOLON")
+
+    def test_evidence_on_correct_line(self):
+        diag = {
+            "normalized": "main.cpp:4:5: error: expected ';' before 'std'",
+            "line": 4,
+            "source_context": [
+                {"line": 3, "code": "int main() {"},
+                {"line": 4, "code": "int x = 10"},
+                {"line": 5, "code": "std::cout << x;"},
+            ],
+        }
+        result = analyze_simple_errors(diag)
+        assert result is not None
+        assert result["evidence"]["line"] == 4
+        assert result["evidence"]["code"] == "int x = 10"
 
 
-def test_type_mismatch_cannot_convert():
-    diag = {
-        "normalized": (
-            "main.cpp:2:13: error: cannot convert 'const char*' to 'int'"
-        ),
-        "line": 2,
-        "source_context": [
-            {"line": 1, "code": "int main() {"},
-            {"line": 2, "code": '    int x = "hello";'},
-        ],
-    }
-    result = analyze_simple_errors(diag)
+# ===========================================================================
+# MISSING BRACE / PAREN / BRACKET
+# ===========================================================================
 
-    assert result is not None
-    _assert_unified_keys(result)
-    assert result["error_type"] == "TYPE_MISMATCH"
-    assert result["analysis_mode"] == "deterministic"
-    assert "cannot convert" in result["compiler_message"]
-    assert result["evidence"]["line"] == 2
-    assert result["evidence"]["code"] == '    int x = "hello";'
+class TestMissingBrackets:
 
+    def test_expected_closing_brace_at_end_of_input(self):
+        _check("main.cpp:10:1: error: expected '}' at end of input", "MISSING_BRACE")
 
-def test_type_mismatch_invalid_conversion():
-    diag = {
-        "normalized": "main.cpp:3:9: error: invalid conversion from 'char*' to 'int'",
-        "line": 3,
-        "source_context": [
-            {"line": 3, "code": "    int y = ptr;"},
-        ],
-    }
-    result = analyze_simple_errors(diag)
+    def test_expected_closing_brace_before(self):
+        _check("main.cpp:5:1: error: expected '}' before 'return'", "MISSING_BRACE")
 
-    assert result is not None
-    _assert_unified_keys(result)
-    assert result["error_type"] == "TYPE_MISMATCH"
-    assert result["analysis_mode"] == "deterministic"
+    def test_expected_closing_paren(self):
+        _check("main.cpp:3:5: error: expected ')'", "MISSING_PAREN")
+
+    def test_expected_opening_paren(self):
+        _check("main.cpp:3:5: error: expected '('", "MISSING_PAREN")
+
+    def test_expected_closing_bracket(self):
+        _check("main.cpp:3:5: error: expected ']'", "MISSING_BRACKET")
+
+    def test_unmatched_open_brace(self):
+        _check("main.cpp:1:1: error: unmatched '{'", "MISSING_BRACE")
 
 
-def test_wrong_arguments():
-    diag = {
-        "normalized": (
-            "main.cpp:3:12: error: no matching function for call to 'add(int)'"
-        ),
-        "line": 3,
-        "source_context": [
-            {"line": 1, "code": "int add(int a, int b) { return a + b; }"},
-            {"line": 2, "code": "int main() {"},
-            {"line": 3, "code": "    return add(1);"},
-        ],
-    }
-    result = analyze_simple_errors(diag)
+# ===========================================================================
+# UNDEFINED VARIABLE — GCC and Clang variants
+# ===========================================================================
 
-    assert result is not None
-    _assert_unified_keys(result)
-    assert result["error_type"] == "WRONG_ARGUMENTS"
-    assert result["analysis_mode"] == "deterministic"
-    assert "no matching function" in result["compiler_message"]
-    assert result["evidence"]["line"] == 3
-    assert result["evidence"]["code"] == "    return add(1);"
+class TestUndefinedVariable:
 
+    def test_gcc_was_not_declared_in_this_scope(self):
+        _check("main.cpp:2:12: error: 'value' was not declared in this scope", "UNDEFINED_VARIABLE")
 
-def test_wrong_arguments_too_few():
-    """GCC 14 emits 'too few arguments to function' for arity under-supply."""
-    diag = {
-        "file": "temp.cpp",
-        "line": 7,
-        "column": 21,
-        "severity": "error",
-        "message": "too few arguments to function 'int add(int, int)'",
-        "source_context": [
-            {"line": 5, "code": "}"},
-            {"line": 6, "code": "int main() {"},
-            {"line": 7, "code": "    std::cout << add(1);"},
-            {"line": 8, "code": "    return 0;"},
-            {"line": 9, "code": "}"},
-        ],
-    }
-    result = analyze_simple_errors(diag)
+    def test_clang_use_of_undeclared_identifier(self):
+        _check("main.cpp:2:12: error: use of undeclared identifier 'value'", "UNDEFINED_VARIABLE")
 
-    assert result is not None, "Pipeline returned None — 'too few arguments' rule did not match"
-    _assert_unified_keys(result)
-    assert result["error_type"] == "WRONG_ARGUMENTS"
-    assert result["analysis_mode"] == "deterministic"
-    assert "too few arguments to function" in result["compiler_message"]
-    assert result["evidence"]["line"] == 7
-    assert result["evidence"]["code"] == "    std::cout << add(1);"
+    def test_clang_use_of_undeclared_identifier_std(self):
+        # std namespace undeclared → MISSING_INCLUDE (higher priority)
+        result = _check("main.cpp:2:5: error: use of undeclared identifier 'std'", "MISSING_INCLUDE")
+        assert result is not None
+
+    def test_undeclared_identifier_generic(self):
+        _check("main.cpp:5:10: error: undeclared identifier 'foo'", "UNDEFINED_VARIABLE")
+
+    def test_identifier_is_undefined(self):
+        _check("main.cpp:5:1: error: identifier 'bar' is undefined", "UNDEFINED_VARIABLE")
+
+    def test_was_not_declared_pattern(self):
+        _check("main.cpp:3:5: error: 'x' was not declared in this scope", "UNDEFINED_VARIABLE")
 
 
-def test_wrong_arguments_too_many():
-    """GCC emits 'too many arguments to function' for arity over-supply."""
-    diag = {
-        "file": "temp.cpp",
-        "line": 3,
-        "column": 5,
-        "severity": "error",
-        "message": "too many arguments to function 'void greet()'",
-        "source_context": [
-            {"line": 1, "code": "void greet() {}"},
-            {"line": 2, "code": "int main() {"},
-            {"line": 3, "code": '    greet("hello");'},
-            {"line": 4, "code": "}"},
-        ],
-    }
-    result = analyze_simple_errors(diag)
+# ===========================================================================
+# UNDEFINED TYPE
+# ===========================================================================
 
-    assert result is not None, "Pipeline returned None — 'too many arguments' rule did not match"
-    _assert_unified_keys(result)
-    assert result["error_type"] == "WRONG_ARGUMENTS"
-    assert result["analysis_mode"] == "deterministic"
-    assert "too many arguments to function" in result["compiler_message"]
-    assert result["evidence"]["line"] == 3
-    assert result["evidence"]["code"] == '    greet("hello");'
+class TestUndefinedType:
+
+    def test_unknown_type_name(self):
+        _check("main.cpp:3:1: error: unknown type name 'MyClass'", "UNDEFINED_TYPE")
+
+    def test_unknown_type_name_variant(self):
+        _check("main.cpp:1:1: error: unknown type name 'uint32_t'", "UNDEFINED_TYPE")
 
 
-def test_missing_include():
-    diag = {
-        "normalized": (
-            "main.cpp:2:10: error: 'cout' is not a member of 'std'"
-        ),
-        "line": 2,
-        "source_context": [
-            {"line": 1, "code": "int main() {"},
-            {"line": 2, "code": '    std::cout << "hi";'},
-        ],
-    }
-    result = analyze_simple_errors(diag)
+# ===========================================================================
+# TYPE MISMATCH
+# ===========================================================================
 
-    assert result is not None
-    _assert_unified_keys(result)
-    assert result["error_type"] == "MISSING_INCLUDE"
-    assert result["analysis_mode"] == "deterministic"
-    assert "is not a member of 'std'" in result["compiler_message"]
-    assert result["evidence"]["line"] == 2
-    assert result["evidence"]["code"] == '    std::cout << "hi";'
+class TestTypeMismatch:
 
+    def test_gcc_cannot_convert(self):
+        _check("main.cpp:2:13: error: cannot convert 'const char*' to 'int'", "TYPE_MISMATCH")
 
-# ---------------------------------------------------------------------------
-# Evidence selection: matching line beats first-entry fallback
-# ---------------------------------------------------------------------------
+    def test_gcc_invalid_conversion_from(self):
+        _check("main.cpp:3:9: error: invalid conversion from 'char*' to 'int'", "TYPE_MISMATCH")
 
-def test_evidence_selects_matching_line_not_first():
-    """When source_context has multiple entries, evidence must use the entry
-    whose line matches the diagnostic's reported line, not the first entry."""
-    diag = {
-        "normalized": "main.cpp:5:3: error: expected ';' before 'return'",
-        "line": 5,
-        "source_context": [
-            {"line": 3, "code": "int main() {"},
-            {"line": 4, "code": "    int x = 42"},   # first entry — wrong line
-            {"line": 5, "code": "    return x;"},    # correct match
-        ],
-    }
-    result = analyze_simple_errors(diag)
+    def test_clang_cannot_initialize_variable(self):
+        _check("main.cpp:2:9: error: cannot initialize a variable of type 'int' with an lvalue of type 'const char[6]'", "TYPE_MISMATCH")
 
-    assert result is not None
-    assert result["evidence"]["line"] == 5
-    assert result["evidence"]["code"] == "    return x;"
+    def test_clang_cannot_initialize_return_object(self):
+        _check("main.cpp:5:12: error: cannot initialize return object of type 'int' with an lvalue of type 'const char *'", "TYPE_MISMATCH")
+
+    def test_incompatible_types(self):
+        _check("main.cpp:4:8: error: incompatible types when assigning to type 'int' from type 'char *'", "TYPE_MISMATCH")
+
+    def test_assigning_from_incompatible_type(self):
+        _check("main.cpp:4:5: error: assigning to 'int' from incompatible type 'const char *'", "TYPE_MISMATCH")
+
+    def test_no_viable_conversion(self):
+        _check("main.cpp:3:14: error: no viable conversion from 'string' to 'int'", "TYPE_MISMATCH")
+
+    def test_static_cast_not_allowed(self):
+        _check("main.cpp:3:5: error: static_cast from 'int*' to 'double*' is not allowed", "TYPE_MISMATCH")
+
+    def test_implicit_conversion_loses(self):
+        _check("main.cpp:3:5: warning: implicit conversion loses integer precision", "TYPE_MISMATCH")
 
 
-# ---------------------------------------------------------------------------
-# Unknown error → None
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# WRONG ARGUMENTS
+# ===========================================================================
 
-def test_unknown_error_returns_none():
-    diag = {"normalized": "some completely unrecognised compiler message XYZ"}
-    result = analyze_simple_errors(diag)
-    assert result is None
+class TestWrongArguments:
 
+    def test_gcc_no_matching_function(self):
+        _check("main.cpp:3:12: error: no matching function for call to 'add(int)'", "WRONG_ARGUMENTS")
 
-# ---------------------------------------------------------------------------
-# Bob stub tests
-# ---------------------------------------------------------------------------
+    def test_gcc_too_few_arguments(self):
+        _check("main.cpp:7:21: error: too few arguments to function 'int add(int, int)'", "WRONG_ARGUMENTS")
 
-_BOB_REQUIRED_KEYS = _UNIFIED_KEYS
+    def test_gcc_too_many_arguments(self):
+        _check("main.cpp:3:5: error: too many arguments to function 'void greet()'", "WRONG_ARGUMENTS")
 
+    def test_clang_requires_n_arguments(self):
+        _check("main.cpp:3:12: note: candidate function not viable: requires 2 arguments, but 1 was provided", "WRONG_ARGUMENTS")
 
-def test_bob_empty_input_shape():
-    """analyze_with_bob must return a valid unified dict even for an empty input."""
-    result = analyze_with_bob({})
+    def test_clang_requires_n_arguments_plural(self):
+        _check("main.cpp:5:5: note: requires 3 arguments, but 2 were provided", "WRONG_ARGUMENTS")
 
-    assert result is not None
-    missing = _BOB_REQUIRED_KEYS - result.keys()
-    assert not missing, f"Missing unified output keys: {missing}"
-    assert result["analysis_mode"] == "ai"
-    assert result["error_type"] == "UNKNOWN"
-    assert result["compiler_message"] == ""
-    assert result["evidence"] == {"line": None, "code": ""}
+    def test_no_viable_overloaded_operator(self):
+        _check("main.cpp:8:15: error: no viable overloaded 'operator<<'", "WRONG_ARGUMENTS")
 
 
-def test_bob_with_message_and_context():
-    """analyze_with_bob must reflect the compiler message and select the
-    correct evidence line from source_context."""
-    diag = {
-        "normalized": "template deduction failed: unknown_symbol",
-        "line": 2,
-        "source_context": [
-            {"line": 1, "code": "template <typename T>"},
-            {"line": 2, "code": "T f(T x) { return x + unknown_symbol; }"},
-        ],
-    }
-    result = analyze_with_bob(diag)
+# ===========================================================================
+# MISSING INCLUDE
+# ===========================================================================
 
-    assert result["analysis_mode"] == "ai"
-    assert result["error_type"] == "UNKNOWN"
-    assert result["compiler_message"] == "template deduction failed: unknown_symbol"
-    assert result["evidence"]["line"] == 2
-    assert result["evidence"]["code"] == "T f(T x) { return x + unknown_symbol; }"
-    missing = _BOB_REQUIRED_KEYS - result.keys()
-    assert not missing, f"Missing unified output keys: {missing}"
+class TestMissingInclude:
+
+    def test_gcc_is_not_member_of_std(self):
+        _check("main.cpp:2:10: error: 'cout' is not a member of 'std'", "MISSING_INCLUDE")
+
+    def test_clang_use_of_undeclared_std(self):
+        _check("main.cpp:2:5: error: use of undeclared identifier 'std'", "MISSING_INCLUDE")
+
+    def test_no_member_named_in_namespace_std(self):
+        _check("main.cpp:2:10: error: no member named 'cout' in namespace 'std'", "MISSING_INCLUDE")
+
+    def test_file_not_found(self):
+        _check("main.cpp:1:10: error: 'myheader.h': file not found", "MISSING_INCLUDE")
+
+    def test_no_such_file_or_directory(self):
+        _check("main.cpp:1:10: fatal error: myheader.h: No such file or directory", "MISSING_INCLUDE")
+
+    def test_namespace_has_no_member_named(self):
+        _check("main.cpp:5:10: error: namespace 'std' has no member named 'cout'", "MISSING_INCLUDE")
+
+
+# ===========================================================================
+# MEMBER NOT FOUND
+# ===========================================================================
+
+class TestMemberNotFound:
+
+    def test_has_no_member_named(self):
+        _check("main.cpp:5:10: error: 'struct Point' has no member named 'z'", "MEMBER_NOT_FOUND")
+
+    def test_no_member_named_in_class(self):
+        _check("main.cpp:5:10: error: no member named 'length' in 'std::basic_string<char>'", "MEMBER_NOT_FOUND")
+
+
+# ===========================================================================
+# UNDEFINED FUNCTION
+# ===========================================================================
+
+class TestUndefinedFunction:
+
+    def test_call_to_undeclared_function(self):
+        _check("main.cpp:3:5: error: call to undeclared function 'compute'", "UNDEFINED_FUNCTION")
+
+    def test_call_to_undefined_function(self):
+        _check("main.cpp:3:5: error: call to undefined function 'compute'", "UNDEFINED_FUNCTION")
+
+    def test_implicit_declaration_of_function(self):
+        _check("main.cpp:3:5: warning: implicit declaration of function 'printf'", "UNDEFINED_FUNCTION")
+
+
+# ===========================================================================
+# MISSING RETURN
+# ===========================================================================
+
+class TestMissingReturn:
+
+    def test_function_does_not_return_a_value(self):
+        _check("main.cpp:5:1: warning: function does not return a value", "MISSING_RETURN")
+
+    def test_control_reaches_end_of_non_void_function(self):
+        _check("main.cpp:5:1: warning: control reaches end of non-void function", "MISSING_RETURN")
+
+    def test_control_may_reach_end(self):
+        _check("main.cpp:5:1: warning: control may reach end of non-void function", "MISSING_RETURN")
+
+    def test_non_void_function_should_return_a_value(self):
+        _check("main.cpp:5:1: warning: non-void function 'compute' should return a value", "MISSING_RETURN")
+
+
+# ===========================================================================
+# ACCESS VIOLATIONS
+# ===========================================================================
+
+class TestAccessViolation:
+
+    def test_private_member_of_class(self):
+        _check("main.cpp:8:10: error: 'x' is a private member of 'MyClass'", "ACCESS_VIOLATION")
+
+    def test_private_member_field(self):
+        _check("main.cpp:8:10: error: private member 'secret' of class 'Foo'", "ACCESS_VIOLATION")
+
+    def test_is_protected_member(self):
+        _check("main.cpp:8:10: error: 'base_val' is protected member", "ACCESS_VIOLATION")
+
+
+# ===========================================================================
+# POINTER ERRORS
+# ===========================================================================
+
+class TestPointerErrors:
+
+    def test_indirection_requires_pointer_operand(self):
+        _check("main.cpp:5:5: error: indirection requires pointer operand ('int' invalid)", "POINTER_ERROR")
+
+    def test_cannot_take_address_of_rvalue(self):
+        _check("main.cpp:5:8: error: cannot take the address of an rvalue of type 'int'", "POINTER_ERROR")
+
+    def test_cannot_dereference_non_pointer(self):
+        _check("main.cpp:4:5: error: cannot dereference non-pointer type 'int'", "POINTER_ERROR")
+
+    def test_dereferencing_incomplete_type(self):
+        _check("main.cpp:4:5: error: dereferencing pointer to incomplete type 'struct Foo'", "POINTER_ERROR")
+
+
+# ===========================================================================
+# REFERENCE ERRORS
+# ===========================================================================
+
+class TestReferenceErrors:
+
+    def test_cannot_bind_non_const(self):
+        _check("main.cpp:3:8: error: cannot bind non-const lvalue reference of type 'int&' to an rvalue", "REFERENCE_ERROR")
+
+    def test_drops_const_qualifier(self):
+        _check("main.cpp:3:8: error: binding reference of type 'int&' to value of type 'const int' drops const qualifier", "CONST_VIOLATION")
+
+
+# ===========================================================================
+# TEMPLATE ERRORS
+# ===========================================================================
+
+class TestTemplateErrors:
+
+    def test_template_argument_deduction_failed(self):
+        _check("main.cpp:5:5: error: template argument deduction failed", "TEMPLATE_ERROR")
+
+    def test_template_instantiation_error(self):
+        _check("main.cpp:5:5: error: template instantiation error", "TEMPLATE_ERROR")
+
+    def test_in_instantiation_of_function_template(self):
+        _check("main.cpp:5:5: note: in instantiation of function template specialization", "TEMPLATE_ERROR")
+
+    def test_invalid_use_of_incomplete_type(self):
+        _check("main.cpp:5:5: error: invalid use of incomplete type", "TEMPLATE_ERROR")
+
+
+# ===========================================================================
+# OPERATOR ERRORS
+# ===========================================================================
+
+class TestOperatorErrors:
+
+    def test_no_match_for_operator(self):
+        _check("main.cpp:5:8: error: no match for operator+ with operands 'int' and 'string'", "OPERATOR_ERROR")
+
+    def test_no_viable_for_operator(self):
+        _check("main.cpp:5:8: error: no viable for operator<<", "OPERATOR_ERROR")
+
+    def test_invalid_operands_to_binary_expression(self):
+        _check("main.cpp:5:10: error: invalid operands to binary expression ('int' and 'std::string')", "OPERATOR_ERROR")
+
+    def test_expression_not_assignable(self):
+        _check("main.cpp:3:5: error: expression is not assignable", "OPERATOR_ERROR")
+
+    def test_lvalue_required_as_left_operand(self):
+        _check("main.cpp:3:5: error: lvalue required as left operand of assignment", "OPERATOR_ERROR")
+
+
+# ===========================================================================
+# REDEFINITION
+# ===========================================================================
+
+class TestRedefinition:
+
+    def test_redefinition_of(self):
+        _check("main.cpp:5:5: error: redefinition of 'main'", "REDEFINITION")
+
+    def test_conflicting_types(self):
+        _check("main.cpp:5:5: error: conflicting types for 'foo'", "REDEFINITION")
+
+    def test_conflicting_return_type(self):
+        _check("main.cpp:5:5: error: conflicting return type specified for 'bar'", "REDEFINITION")
+
+
+# ===========================================================================
+# LINKER ERRORS
+# ===========================================================================
+
+class TestLinkerErrors:
+
+    def test_undefined_reference(self):
+        _check("main.cpp:3:5: error: undefined reference to 'compute()'", "LINKER_ERROR")
+
+    def test_undefined_symbol(self):
+        _check("main.cpp:3:5: error: undefined symbol to 'MyClass::method'", "LINKER_ERROR")
+
+    def test_multiple_definition(self):
+        _check("main.cpp:3:5: error: multiple definition of 'globalVar'", "LINKER_ERROR")
+
+    def test_ld_returned_nonzero(self):
+        _check("collect2: error: ld returned 1 exit status", "LINKER_ERROR")
+
+
+# ===========================================================================
+# SYNTAX ERRORS
+# ===========================================================================
+
+class TestSyntaxErrors:
+
+    def test_expected_primary_expression(self):
+        _check("main.cpp:3:5: error: expected primary-expression before '}'", "SYNTAX_ERROR")
+
+    def test_expected_unqualified_id(self):
+        _check("main.cpp:3:5: error: expected unqualified-id before '{' token", "SYNTAX_ERROR")
+
+    def test_expected_expression(self):
+        _check("main.cpp:3:5: error: expected expression", "SYNTAX_ERROR")
+
+    def test_stray_in_program(self):
+        _check("main.cpp:3:5: error: stray '\\302' in program", "SYNTAX_ERROR")
+
+    def test_auto_requires_initializer(self):
+        _check("main.cpp:3:5: error: 'auto' type specifier requires an initializer", "SYNTAX_ERROR")
+
+    def test_expected_class_keyword(self):
+        _check("main.cpp:1:10: error: expected 'class' keyword", "SYNTAX_ERROR")
+
+
+# ===========================================================================
+# DIVISION BY ZERO
+# ===========================================================================
+
+class TestDivisionByZero:
+
+    def test_division_by_zero(self):
+        _check("main.cpp:3:5: error: division by zero", "DIVISION_BY_ZERO")
+
+
+# ===========================================================================
+# DELETED FUNCTION
+# ===========================================================================
+
+class TestDeletedFunction:
+
+    def test_use_of_deleted_function(self):
+        _check("main.cpp:5:5: error: use of deleted function 'Foo::Foo(const Foo&)'", "DELETED_FUNCTION")
+
+    def test_use_of_deleted_member_function(self):
+        _check("main.cpp:5:5: error: use of deleted member function 'Bar::operator=(const Bar&)'", "DELETED_FUNCTION")
+
+
+# ===========================================================================
+# ABSTRACT CLASS
+# ===========================================================================
+
+class TestAbstractClass:
+
+    def test_cannot_instantiate_abstract_class(self):
+        _check("main.cpp:5:5: error: cannot instantiate abstract class", "ABSTRACT_CLASS")
+
+    def test_object_of_abstract_class_not_allowed(self):
+        _check("main.cpp:5:5: error: object of abstract class type 'Base' is not allowed", "ABSTRACT_CLASS")
+
+
+# ===========================================================================
+# WRONG RETURN
+# ===========================================================================
+
+class TestWrongReturn:
+
+    def test_void_function_should_not_return(self):
+        _check("main.cpp:3:5: warning: void function 'foo' should not return a value", "WRONG_RETURN")
+
+
+# ===========================================================================
+# INCOMPLETE TYPE
+# ===========================================================================
+
+class TestIncompleteType:
+
+    def test_member_access_into_incomplete_type(self):
+        _check("main.cpp:5:8: error: member access into incomplete type 'Foo'", "INCOMPLETE_TYPE")
+
+
+# ===========================================================================
+# Evidence selection
+# ===========================================================================
+
+class TestEvidenceSelection:
+
+    def test_matching_line_beats_first_entry(self):
+        diag = {
+            "normalized": "main.cpp:5:3: error: expected ';' before 'return'",
+            "line": 5,
+            "source_context": [
+                {"line": 3, "code": "int main() {"},
+                {"line": 4, "code": "    int x = 42"},
+                {"line": 5, "code": "    return x;"},
+            ],
+        }
+        result = analyze_simple_errors(diag)
+        assert result is not None
+        assert result["evidence"]["line"] == 5
+        assert result["evidence"]["code"] == "    return x;"
+
+    def test_fallback_to_first_entry_when_no_match(self):
+        diag = {
+            "normalized": "main.cpp:10:5: error: expected ';' before 'return'",
+            "line": 10,
+            "source_context": [
+                {"line": 8, "code": "void f() {"},
+                {"line": 9, "code": "    int x = 0"},
+            ],
+        }
+        result = analyze_simple_errors(diag)
+        assert result is not None
+        # Line 10 not in context, so falls back to first entry
+        assert result["evidence"]["line"] == 8
+
+    def test_no_source_context_still_returns_result(self):
+        diag = {
+            "normalized": "main.cpp:3:5: error: expected ';' before '}'",
+            "line": 3,
+            "source_context": [],
+        }
+        result = analyze_simple_errors(diag)
+        assert result is not None
+        assert result["evidence"]["line"] == 3
+        assert result["evidence"]["code"] == ""
+
+
+# ===========================================================================
+# No match → None
+# ===========================================================================
+
+class TestNoMatch:
+
+    def test_completely_unknown_message_returns_none(self):
+        diag = {"normalized": "this is a completely unrecognised message XYZ123"}
+        result = analyze_simple_errors(diag)
+        assert result is None
+
+    def test_empty_message_returns_none(self):
+        result = analyze_simple_errors({"normalized": ""})
+        assert result is None
+
+    def test_missing_message_returns_none(self):
+        result = analyze_simple_errors({})
+        assert result is None
+
+
+# ===========================================================================
+# Rule count verification
+# ===========================================================================
+
+class TestRuleCoverage:
+
+    def test_rule_count_over_100(self):
+        """The rule engine must have at least 100 rule entries."""
+        from backend.diagnostics import _RULES
+        assert len(_RULES) >= 100, f"Only {len(_RULES)} rules found — need at least 100"
+
+    def test_all_rules_have_required_fields(self):
+        """Every rule must have pattern, error_type, and explanation fields."""
+        from backend.diagnostics import _RULES
+        required = {"error_type", "compiler_explanation", "source_explanation", "what_to_check", "suggestion"}
+        for i, rule in enumerate(_RULES):
+            assert "pattern" in rule, f"Rule {i} has no 'pattern'"
+            missing = required - rule.keys()
+            assert not missing, f"Rule {i} ({rule.get('error_type', '?')}) missing fields: {missing}"
+
+    def test_all_patterns_compile(self):
+        """All regex patterns must be valid compiled patterns."""
+        import re
+        from backend.diagnostics import _RULES
+        for i, rule in enumerate(_RULES):
+            if "pattern" in rule:
+                assert hasattr(rule["pattern"], "search"), f"Rule {i} pattern is not a compiled regex"
+
+
+# ===========================================================================
+# Bob fallback
+# ===========================================================================
+
+class TestBobFallback:
+
+    def test_empty_input_returns_valid_schema(self):
+        result = analyze_with_bob({})
+        assert result is not None
+        missing = _UNIFIED_KEYS - result.keys()
+        assert not missing, f"Missing keys: {missing}"
+        assert result["analysis_mode"] == "ai"
+        assert result["error_type"] == "UNKNOWN"
+        assert result["compiler_message"] == ""
+        assert result["evidence"] == {"line": None, "code": ""}
+
+    def test_with_message_and_context(self):
+        diag = {
+            "normalized": "template deduction failed: unknown_symbol",
+            "line": 2,
+            "source_context": [
+                {"line": 1, "code": "template <typename T>"},
+                {"line": 2, "code": "T f(T x) { return x + unknown_symbol; }"},
+            ],
+        }
+        result = analyze_with_bob(diag)
+        assert result["analysis_mode"] == "ai"
+        assert result["error_type"] == "UNKNOWN"
+        assert result["compiler_message"] == "template deduction failed: unknown_symbol"
+        assert result["evidence"]["line"] == 2
+        assert result["evidence"]["code"] == "T f(T x) { return x + unknown_symbol; }"
+
+    def test_hint_for_template_error(self):
+        diag = {"normalized": "template argument deduction error", "line": 1, "source_context": []}
+        result = analyze_with_bob(diag)
+        assert "template" in result["compiler_explanation"].lower()
+
+    def test_hint_for_conversion_error(self):
+        diag = {"normalized": "some cast or conversion issue", "line": 1, "source_context": []}
+        result = analyze_with_bob(diag)
+        assert "conversion" in result["compiler_explanation"].lower() or "cast" in result["compiler_explanation"].lower()
+
+    def test_never_returns_none(self):
+        """analyze_with_bob must always return a dict, never None."""
+        for msg in ["", "xyz", "template error", "namespace issue"]:
+            result = analyze_with_bob({"normalized": msg})
+            assert result is not None
+            assert isinstance(result, dict)

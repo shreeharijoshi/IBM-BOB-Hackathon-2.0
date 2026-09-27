@@ -1,4 +1,6 @@
-out/
+src/
 node_modules/
 *.vsix
 .vscode-test/
+*.map
+tsconfig.json

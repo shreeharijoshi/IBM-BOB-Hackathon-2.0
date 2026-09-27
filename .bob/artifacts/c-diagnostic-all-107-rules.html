@@ -1,0 +1,370 @@
+
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>C++ Diagnostic — All 107 Rules</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; font-size: 14px; line-height: 1.6; background: #ffffff; color: #1f2328; margin: 0; padding: 0; }
+  .page { max-width: 760px; margin: 0 auto; padding: 32px 24px 48px; }
+  h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
+  .subtitle { color: #57606a; font-size: 13px; margin-bottom: 28px; }
+  .summary-bar { display: flex; gap: 20px; flex-wrap: wrap; background: #f7f8fa; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 16px; margin-bottom: 28px; }
+  .stat { display: flex; flex-direction: column; align-items: center; }
+  .stat-num { font-size: 26px; font-weight: 700; color: #3b82d4; line-height: 1; }
+  .stat-label { font-size: 11px; color: #57606a; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+
+  .toc { background: #f7f8fa; border: 1px solid #e5e7eb; border-radius: 6px; padding: 14px 18px; margin-bottom: 32px; }
+  .toc-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #57606a; margin-bottom: 10px; }
+  .toc-grid { display: flex; flex-wrap: wrap; gap: 5px; }
+  .toc-item { font-size: 11px; padding: 3px 8px; border-radius: 4px; border: 1px solid #e5e7eb; background: #fff; color: #1f2328; text-decoration: none; white-space: nowrap; }
+  .toc-item:hover { background: #f0f6ff; border-color: #3b82d4; color: #3b82d4; }
+  .toc-count { font-weight: 700; color: #57606a; }
+
+  .category { margin-bottom: 28px; }
+  .cat-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 2px solid #e5e7eb; }
+  .cat-name { font-size: 15px; font-weight: 700; }
+  .cat-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; background: #f0f6ff; color: #3b82d4; border: 1px solid #bfdbfe; }
+
+  .rule { border: 1px solid #e5e7eb; border-radius: 5px; margin-bottom: 8px; overflow: hidden; }
+  .rule-header { background: #f7f8fa; padding: 7px 12px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 8px; }
+  .rule-num { font-size: 11px; font-weight: 700; color: #57606a; min-width: 22px; }
+  .rule-pattern { font-family: "SFMono-Regular", "Consolas", "Liberation Mono", monospace; font-size: 12px; color: #0550ae; word-break: break-all; }
+  .rule-body { padding: 8px 12px; display: grid; grid-template-columns: 90px 1fr; gap: 4px 8px; font-size: 13px; }
+  .rule-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #57606a; padding-top: 1px; }
+  .rule-text { color: #1f2328; }
+  .rule-fix { color: #1a7f37; }
+
+  .cat-colors { --c: #3b82d4; }
+  .c-MISSING_SEMICOLON  { --c: #e85d04; } .c-MISSING_BRACE     { --c: #e85d04; }
+  .c-MISSING_PAREN      { --c: #e85d04; } .c-MISSING_BRACKET   { --c: #e85d04; }
+  .c-MISSING_INCLUDE    { --c: #7c3aed; } .c-MISSING_RETURN    { --c: #7c3aed; }
+  .c-UNDEFINED_VARIABLE { --c: #dc2626; } .c-UNDEFINED_TYPE    { --c: #dc2626; }
+  .c-UNDEFINED_FUNCTION { --c: #dc2626; }
+  .c-TYPE_MISMATCH      { --c: #0284c7; } .c-CONST_VIOLATION   { --c: #0284c7; }
+  .c-WRONG_ARGUMENTS    { --c: #0284c7; } .c-WRONG_CONSTRUCTOR { --c: #0284c7; }
+  .c-WRONG_CALL         { --c: #0284c7; } .c-WRONG_RETURN      { --c: #0284c7; }
+  .c-POINTER_ERROR      { --c: #b45309; } .c-REFERENCE_ERROR   { --c: #b45309; }
+  .c-TEMPLATE_ERROR     { --c: #0891b2; } .c-ITERATOR_ERROR    { --c: #0891b2; }
+  .c-OPERATOR_ERROR     { --c: #7c3aed; }
+  .c-ACCESS_VIOLATION   { --c: #be123c; } .c-ABSTRACT_CLASS    { --c: #be123c; }
+  .c-INCOMPLETE_TYPE    { --c: #be123c; } .c-DELETED_FUNCTION  { --c: #be123c; }
+  .c-REDEFINITION       { --c: #92400e; } .c-SHADOWING         { --c: #92400e; }
+  .c-LINKER_ERROR       { --c: #374151; } .c-IO_ERROR          { --c: #374151; }
+  .c-SYNTAX_ERROR       { --c: #065f46; } .c-CONSTEXPR_ERROR   { --c: #065f46; }
+  .c-DIVISION_BY_ZERO   { --c: #1d4ed8; }
+
+  .category .cat-badge { background: color-mix(in srgb, var(--c) 10%, white); color: var(--c); border-color: color-mix(in srgb, var(--c) 30%, white); }
+  .category .cat-name  { color: var(--c); }
+
+  hr.page-break { border: none; border-top: 1px solid #e5e7eb; margin: 32px 0; }
+  footer { text-align: center; font-size: 12px; color: #8b949e; padding-top: 24px; border-top: 1px solid #e5e7eb; margin-top: 40px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>C++ Diagnostic — All 107 Rules</h1>
+  <p class="subtitle">Complete reference of every deterministic rule in the engine. Rules are sorted by priority within each category. Both GCC and Apple Clang message variants are covered.</p>
+
+  <div class="summary-bar">
+    <div class="stat"><span class="stat-num">107</span><span class="stat-label">Total Rules</span></div>
+    <div class="stat"><span class="stat-num">32</span><span class="stat-label">Error Types</span></div>
+    <div class="stat"><span class="stat-num">2</span><span class="stat-label">Compilers (GCC + Clang)</span></div>
+    <div class="stat"><span class="stat-num">1</span><span class="stat-label">API key needed</span></div>
+  </div>
+
+  <div class="toc">
+    <div class="toc-title">Jump to category</div>
+    <div class="toc-grid">
+      <a class="toc-item" href="#MISSING_SEMICOLON">MISSING_SEMICOLON <span class="toc-count">5</span></a>
+      <a class="toc-item" href="#MISSING_BRACE">MISSING_BRACE <span class="toc-count">3</span></a>
+      <a class="toc-item" href="#MISSING_PAREN">MISSING_PAREN <span class="toc-count">2</span></a>
+      <a class="toc-item" href="#MISSING_BRACKET">MISSING_BRACKET <span class="toc-count">1</span></a>
+      <a class="toc-item" href="#MISSING_INCLUDE">MISSING_INCLUDE <span class="toc-count">8</span></a>
+      <a class="toc-item" href="#MISSING_RETURN">MISSING_RETURN <span class="toc-count">3</span></a>
+      <a class="toc-item" href="#UNDEFINED_VARIABLE">UNDEFINED_VARIABLE <span class="toc-count">6</span></a>
+      <a class="toc-item" href="#UNDEFINED_TYPE">UNDEFINED_TYPE <span class="toc-count">2</span></a>
+      <a class="toc-item" href="#UNDEFINED_FUNCTION">UNDEFINED_FUNCTION <span class="toc-count">2</span></a>
+      <a class="toc-item" href="#TYPE_MISMATCH">TYPE_MISMATCH <span class="toc-count">12</span></a>
+      <a class="toc-item" href="#CONST_VIOLATION">CONST_VIOLATION <span class="toc-count">1</span></a>
+      <a class="toc-item" href="#WRONG_ARGUMENTS">WRONG_ARGUMENTS <span class="toc-count">5</span></a>
+      <a class="toc-item" href="#WRONG_CONSTRUCTOR">WRONG_CONSTRUCTOR <span class="toc-count">2</span></a>
+      <a class="toc-item" href="#WRONG_CALL">WRONG_CALL <span class="toc-count">1</span></a>
+      <a class="toc-item" href="#WRONG_RETURN">WRONG_RETURN <span class="toc-count">1</span></a>
+      <a class="toc-item" href="#POINTER_ERROR">POINTER_ERROR <span class="toc-count">6</span></a>
+      <a class="toc-item" href="#REFERENCE_ERROR">REFERENCE_ERROR <span class="toc-count">1</span></a>
+      <a class="toc-item" href="#TEMPLATE_ERROR">TEMPLATE_ERROR <span class="toc-count">5</span></a>
+      <a class="toc-item" href="#ITERATOR_ERROR">ITERATOR_ERROR <span class="toc-count">1</span></a>
+      <a class="toc-item" href="#OPERATOR_ERROR">OPERATOR_ERROR <span class="toc-count">5</span></a>
+      <a class="toc-item" href="#ACCESS_VIOLATION">ACCESS_VIOLATION <span class="toc-count">2</span></a>
+      <a class="toc-item" href="#ABSTRACT_CLASS">ABSTRACT_CLASS <span class="toc-count">3</span></a>
+      <a class="toc-item" href="#INCOMPLETE_TYPE">INCOMPLETE_TYPE <span class="toc-count">2</span></a>
+      <a class="toc-item" href="#DELETED_FUNCTION">DELETED_FUNCTION <span class="toc-count">1</span></a>
+      <a class="toc-item" href="#REDEFINITION">REDEFINITION <span class="toc-count">3</span></a>
+      <a class="toc-item" href="#SHADOWING">SHADOWING <span class="toc-count">1</span></a>
+      <a class="toc-item" href="#LINKER_ERROR">LINKER_ERROR <span class="toc-count">3</span></a>
+      <a class="toc-item" href="#IO_ERROR">IO_ERROR <span class="toc-count">1</span></a>
+      <a class="toc-item" href="#SYNTAX_ERROR">SYNTAX_ERROR <span class="toc-count">15</span></a>
+      <a class="toc-item" href="#CONSTEXPR_ERROR">CONSTEXPR_ERROR <span class="toc-count">1</span></a>
+      <a class="toc-item" href="#DIVISION_BY_ZERO">DIVISION_BY_ZERO <span class="toc-count">1</span></a>
+    </div>
+  </div>
+
+  
+
+  <div class="category c-MISSING_SEMICOLON" id="MISSING_SEMICOLON">
+    <div class="cat-header"><span class="cat-name">MISSING_SEMICOLON</span><span class="cat-badge">5 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">expected ';' at end of declaration</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler reached the end of a declaration without finding the required semicolon terminator.</span><span class="rule-label">Fix</span><span class="rule-fix">Add a semicolon (';') at the end of the declaration.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">expected ';' after (return|expression|declaration|statement)</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler expected a semicolon after this construct.</span><span class="rule-label">Fix</span><span class="rule-fix">Add a semicolon (';') after the statement.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#3</span><span class="rule-pattern">expected ';' before '}'</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler found a closing brace before the expected semicolon.</span><span class="rule-label">Fix</span><span class="rule-fix">Add a semicolon (';') after the last statement before '}'.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#4</span><span class="rule-pattern">expected ';'</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler reached a token it did not expect because a semicolon is missing.</span><span class="rule-label">Fix</span><span class="rule-fix">Add a semicolon (';') at the end of the incomplete statement.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#5</span><span class="rule-pattern">expected ',' or ';'</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler expected a comma or semicolon to continue or end a declaration or statement.</span><span class="rule-label">Fix</span><span class="rule-fix">Add a semicolon (';') at the end of the incomplete statement.</span></div></div>
+  </div>
+
+  <div class="category c-MISSING_BRACE" id="MISSING_BRACE">
+    <div class="cat-header"><span class="cat-name">MISSING_BRACE</span><span class="cat-badge">3 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">expected '}' at end of input</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The file ended without the expected closing brace. One or more '{' have no matching '}'.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the missing closing brace '}' at the end of the appropriate block.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">expected '}' (before|after)</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler expected a closing brace at this point.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the missing closing brace '}'.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#3</span><span class="rule-pattern">unmatched '{'</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">An opening brace '{' has no matching closing brace.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the missing closing brace '}'.</span></div></div>
+  </div>
+
+  <div class="category c-MISSING_PAREN" id="MISSING_PAREN">
+    <div class="cat-header"><span class="cat-name">MISSING_PAREN</span><span class="cat-badge">2 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">expected ')'</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler expected a closing parenthesis.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the missing closing parenthesis ')'.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">expected '('</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler expected an opening parenthesis.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the missing opening parenthesis '('.</span></div></div>
+  </div>
+
+  <div class="category c-MISSING_BRACKET" id="MISSING_BRACKET">
+    <div class="cat-header"><span class="cat-name">MISSING_BRACKET</span><span class="cat-badge">1 rule</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">expected ']'</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler expected a closing bracket ']'.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the missing closing bracket ']'.</span></div></div>
+  </div>
+
+  <div class="category c-SYNTAX_ERROR" id="SYNTAX_ERROR">
+    <div class="cat-header"><span class="cat-name">SYNTAX_ERROR</span><span class="cat-badge">15 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">expected (primary-expression|unqualified-id)</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler expected a valid expression but found unexpected text.</span><span class="rule-label">Fix</span><span class="rule-fix">Fix the syntax error at the indicated location.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">expected '(class|struct|typename)' keyword</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A template parameter declaration requires the 'class' or 'typename' keyword.</span><span class="rule-label">Fix</span><span class="rule-fix">Write 'template &lt;typename T&gt;' or 'template &lt;class T&gt;' for the template parameter.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#3</span><span class="rule-pattern">'([^']+)' declared as a parameter</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A function parameter name conflicts with a local declaration.</span><span class="rule-label">Fix</span><span class="rule-fix">Use distinct names for the parameter and the local variable.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#4</span><span class="rule-pattern">'auto' type specifier requires an initializer</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A variable declared with 'auto' must have an initializer so the type can be deduced.</span><span class="rule-label">Fix</span><span class="rule-fix">Write 'auto x = &lt;value&gt;;' to allow the type to be deduced.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#5</span><span class="rule-pattern">jump to (label|case) ... crosses initialization</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A goto or switch statement jumps over a variable initialization.</span><span class="rule-label">Fix</span><span class="rule-fix">Move variable declarations before the jump point, or enclose the initialization in a block.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#6</span><span class="rule-pattern">'...' is not (a struct|a class|a union|an enum|a namespace)</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">An identifier is used as a type but is not one.</span><span class="rule-label">Fix</span><span class="rule-fix">Define the struct, class, enum, or namespace with the expected name.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#7</span><span class="rule-pattern">case value '...' not in enumerated type</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A switch case value does not belong to the switch expression's enumerated type.</span><span class="rule-label">Fix</span><span class="rule-fix">Replace the case value with a valid enum member from the type used in the switch expression.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#8</span><span class="rule-pattern">this declaration has no storage class or type specifier</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A declaration at global scope is missing a type or storage class.</span><span class="rule-label">Fix</span><span class="rule-fix">Move the code inside a function, or add the required type to the declaration.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#9</span><span class="rule-pattern">expected expression</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler expected a valid expression at this point.</span><span class="rule-label">Fix</span><span class="rule-fix">Provide a valid expression at the indicated location.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#10</span><span class="rule-pattern">stray '...' in program</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A character that has no syntactic meaning in this context was found.</span><span class="rule-label">Fix</span><span class="rule-fix">Remove the stray character from the source file.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#11</span><span class="rule-pattern">unexpected token</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler encountered a token it did not expect at this position.</span><span class="rule-label">Fix</span><span class="rule-fix">Remove or relocate the unexpected token.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#12</span><span class="rule-pattern">initializer list fallback disabled</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">Initializer list syntax is used in an unsupported context.</span><span class="rule-label">Fix</span><span class="rule-fix">Use parentheses () for constructor calls or explicit assignment for non-aggregate types.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#13</span><span class="rule-pattern">lambda expression.*not allowed in this context</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A lambda expression is used where lambdas are not permitted.</span><span class="rule-label">Fix</span><span class="rule-fix">Extract the lambda body into a named function or use it in an expression context.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#14</span><span class="rule-pattern">expected (type-specifier|a type)</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler expected a type name at this location.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the correct type name at the indicated location.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#15</span><span class="rule-pattern">initializer for aggregate with no elements requires explicit braces</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">An empty aggregate initializer requires explicit braces {}.</span><span class="rule-label">Fix</span><span class="rule-fix">Use '= {}' or '{}' to initialize the aggregate explicitly.</span></div></div>
+  </div>
+
+  
+
+  <div class="category c-UNDEFINED_VARIABLE" id="UNDEFINED_VARIABLE">
+    <div class="cat-header"><span class="cat-name">UNDEFINED_VARIABLE</span><span class="cat-badge">6 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">'...' was not declared in this scope; did you mean '...'</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The identifier is not declared; the compiler suggests a similar name (GCC did-you-mean).</span><span class="rule-label">Fix</span><span class="rule-fix">Use the suggested name, or declare the intended identifier before using it.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">was not declared in this scope</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">GCC: the identifier is not in any visible scope.</span><span class="rule-label">Fix</span><span class="rule-fix">Declare the variable before using it, or fix the spelling if it is a typo.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#3</span><span class="rule-pattern">use of undeclared identifier</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">Clang: the identifier has no visible declaration.</span><span class="rule-label">Fix</span><span class="rule-fix">Declare the identifier before using it, or add the required #include.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#4</span><span class="rule-pattern">undeclared identifier</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">An identifier used in this expression has not been declared.</span><span class="rule-label">Fix</span><span class="rule-fix">Add a declaration for the identifier before it is used.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#5</span><span class="rule-pattern">'...' (was not declared|is not declared)</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The named identifier has not been declared in this scope.</span><span class="rule-label">Fix</span><span class="rule-fix">Declare the variable or add the required #include directive.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#6</span><span class="rule-pattern">identifier '...' is undefined</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The identifier has no definition visible at this point.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the variable declaration or include the appropriate header.</span></div></div>
+  </div>
+
+  <div class="category c-UNDEFINED_TYPE" id="UNDEFINED_TYPE">
+    <div class="cat-header"><span class="cat-name">UNDEFINED_TYPE</span><span class="cat-badge">2 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">unknown type name</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler does not recognise this as a known type.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the required #include or define/typedef the type before using it.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">'...' does not name a type</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The identifier is not a known type in this context.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the type definition, include the required header, or fix the spelling.</span></div></div>
+  </div>
+
+  <div class="category c-UNDEFINED_FUNCTION" id="UNDEFINED_FUNCTION">
+    <div class="cat-header"><span class="cat-name">UNDEFINED_FUNCTION</span><span class="cat-badge">2 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">call to (undefined|undeclared) function</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The function called has not been declared.</span><span class="rule-label">Fix</span><span class="rule-fix">Add a function declaration (prototype) before the call site, or include the header that declares the function.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">implicit declaration of function</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The function is used without a prior declaration.</span><span class="rule-label">Fix</span><span class="rule-fix">Declare the function before calling it, or include the appropriate header.</span></div></div>
+  </div>
+
+  
+
+  <div class="category c-MISSING_INCLUDE" id="MISSING_INCLUDE">
+    <div class="cat-header"><span class="cat-name">MISSING_INCLUDE</span><span class="cat-badge">8 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">use of undeclared identifier 'std'  <em style="font-style:normal;color:#7c3aed">[Clang — priority 15]</em></span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The 'std' namespace is not visible because no standard-library headers have been included.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the required #include at the top of your file (e.g. #include &lt;iostream&gt;).</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">no member named '...' in namespace 'std'</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The std namespace does not contain this member — required header not included.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the appropriate #include for the standard library symbol you are using.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#3</span><span class="rule-pattern">'...': file not found</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler cannot find the included header file.</span><span class="rule-label">Fix</span><span class="rule-fix">Check the filename spelling, add the missing include directory, or install the required library.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#4</span><span class="rule-pattern">namespace '...' has no member named</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The accessed name does not exist in the namespace — possibly a missing include.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the required #include or correct the namespace qualifier.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#5</span><span class="rule-pattern">is not a member of 'std'  <em style="font-style:normal;color:#7c3aed">[GCC]</em></span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler does not recognise the identifier as a member of 'std' — required header missing.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the missing #include directive for the standard-library header that defines the symbol.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#6</span><span class="rule-pattern">no include path in which to search for</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler cannot find the specified header file in its include search paths.</span><span class="rule-label">Fix</span><span class="rule-fix">Check the filename spelling, add the directory to the include path, or install the missing library.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#7</span><span class="rule-pattern">no such file or directory</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler cannot find the included file.</span><span class="rule-label">Fix</span><span class="rule-fix">Correct the filename or install the missing library package.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#8</span><span class="rule-pattern">size_type.*not a member of.*std</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The std::size_type is not visible because the required header is missing.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the appropriate #include for the container (e.g. #include &lt;vector&gt;).</span></div></div>
+  </div>
+
+  
+
+  <div class="category c-TYPE_MISMATCH" id="TYPE_MISMATCH">
+    <div class="cat-header"><span class="cat-name">TYPE_MISMATCH</span><span class="cat-badge">12 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">cannot initialize a variable of type '...' with  <em style="font-style:normal;color:#0284c7">[Clang]</em></span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler cannot use the given value to initialize a variable of the declared type.</span><span class="rule-label">Fix</span><span class="rule-fix">Change the initializer to match the variable type, or cast the value explicitly.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">cannot initialize return object of type  <em style="font-style:normal;color:#0284c7">[Clang]</em></span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The return value type does not match the declared return type of the function.</span><span class="rule-label">Fix</span><span class="rule-fix">Change the returned value to match the function's return type, or update the return type declaration.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#3</span><span class="rule-pattern">assigning to '...' from incompatible type  <em style="font-style:normal;color:#0284c7">[Clang]</em></span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The value being assigned is not compatible with the variable's type.</span><span class="rule-label">Fix</span><span class="rule-fix">Use a value of the correct type or add an explicit cast.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#4</span><span class="rule-pattern">no viable conversion from '...' to '...'</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler found no way to convert between these two types.</span><span class="rule-label">Fix</span><span class="rule-fix">Provide an explicit conversion operator or constructor, or change the types to be compatible.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#5</span><span class="rule-pattern">cannot convert  <em style="font-style:normal;color:#0284c7">[GCC]</em></span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler cannot implicitly convert the value to the required type.</span><span class="rule-label">Fix</span><span class="rule-fix">Use a value of the correct type, or add an explicit cast if the conversion is intentional.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#6</span><span class="rule-pattern">invalid conversion from  <em style="font-style:normal;color:#0284c7">[GCC]</em></span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler detected an invalid implicit type conversion.</span><span class="rule-label">Fix</span><span class="rule-fix">Use a value of the correct type, or add an explicit cast if the conversion is intentional.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#7</span><span class="rule-pattern">static_cast from '...' to '...' is not allowed</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The requested static_cast between these types is not permitted.</span><span class="rule-label">Fix</span><span class="rule-fix">Use the correct cast operator for the types involved, or redesign to avoid the cast.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#8</span><span class="rule-pattern">return type '...' must match previous return type</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">Conflicting return types in a function definition.</span><span class="rule-label">Fix</span><span class="rule-fix">Make the return type consistent between the declaration and definition.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#9</span><span class="rule-pattern">narrowing conversion from '...' to '...'</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A value is narrowed (truncated) when converting to a smaller type.</span><span class="rule-label">Fix</span><span class="rule-fix">Use an explicit cast to silence the error intentionally, or use a larger type.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#10</span><span class="rule-pattern">incompatible types</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The types of the operands or assignment sides are incompatible.</span><span class="rule-label">Fix</span><span class="rule-fix">Cast one operand to the correct type, or change the variable types to match.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#11</span><span class="rule-pattern">implicit conversion (from|loses)</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">An implicit type conversion may lose information.</span><span class="rule-label">Fix</span><span class="rule-fix">Use an explicit cast to make the conversion intentional, or use a type that fits the data.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#12</span><span class="rule-pattern">comparison between (signed and unsigned|pointer and integer)</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A comparison is made between incompatible integer types.</span><span class="rule-label">Fix</span><span class="rule-fix">Cast one operand to match the other type, or use consistent signedness across comparisons.</span></div></div>
+  </div>
+
+  <div class="category c-CONST_VIOLATION" id="CONST_VIOLATION">
+    <div class="cat-header"><span class="cat-name">CONST_VIOLATION</span><span class="cat-badge">1 rule</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">binding reference of type '...' to value of type '...' drops (const|volatile) qualifier</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A reference is binding to a value but discarding a const or volatile qualifier.</span><span class="rule-label">Fix</span><span class="rule-fix">Change the reference to 'const T&amp;' or use a const_cast if intentional.</span></div></div>
+  </div>
+
+  
+
+  <div class="category c-WRONG_ARGUMENTS" id="WRONG_ARGUMENTS">
+    <div class="cat-header"><span class="cat-name">WRONG_ARGUMENTS</span><span class="cat-badge">5 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">requires \d+ arguments?, but \d+ (was|were) provided  <em style="font-style:normal;color:#0284c7">[Clang]</em></span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The function requires a different number of arguments than were provided.</span><span class="rule-label">Fix</span><span class="rule-fix">Adjust the function call to provide the exact number of arguments the function expects.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">no matching function for call to  <em style="font-style:normal;color:#0284c7">[GCC + Clang]</em></span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler could not find an overload that accepts the argument types or count provided.</span><span class="rule-label">Fix</span><span class="rule-fix">Adjust the call to match the function signature — correct number and types of arguments.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#3</span><span class="rule-pattern">too few arguments to function  <em style="font-style:normal;color:#0284c7">[GCC]</em></span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The function call provides fewer arguments than required.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the missing argument(s) to the function call to match the function signature.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#4</span><span class="rule-pattern">too many arguments to function  <em style="font-style:normal;color:#0284c7">[GCC]</em></span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The function call provides more arguments than the function accepts.</span><span class="rule-label">Fix</span><span class="rule-fix">Remove the extra argument(s) from the function call.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#5</span><span class="rule-pattern">no viable overloaded '(operator...)'</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">No overload of the operator matches the operand types.</span><span class="rule-label">Fix</span><span class="rule-fix">Define the operator overload for the types used, or convert the operands to compatible types.</span></div></div>
+  </div>
+
+  <div class="category c-WRONG_CONSTRUCTOR" id="WRONG_CONSTRUCTOR">
+    <div class="cat-header"><span class="cat-name">WRONG_CONSTRUCTOR</span><span class="cat-badge">2 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">no matching constructor for initialization</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">No constructor matches the argument types used in the initialization.</span><span class="rule-label">Fix</span><span class="rule-fix">Use an argument type that matches an existing constructor, or add a new constructor.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">no matching (constructor|conversion function) for</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">No constructor or conversion function matches the argument types.</span><span class="rule-label">Fix</span><span class="rule-fix">Correct the constructor arguments or add a matching constructor overload.</span></div></div>
+  </div>
+
+  <div class="category c-WRONG_CALL" id="WRONG_CALL">
+    <div class="cat-header"><span class="cat-name">WRONG_CALL</span><span class="cat-badge">1 rule</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">'...' is not a function</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The identifier is being called as a function but is not a function.</span><span class="rule-label">Fix</span><span class="rule-fix">Ensure the identifier refers to a callable function, not a variable or type.</span></div></div>
+  </div>
+
+  <div class="category c-MISSING_RETURN" id="MISSING_RETURN">
+    <div class="cat-header"><span class="cat-name">MISSING_RETURN</span><span class="cat-badge">3 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">non-void function '...' should return a value  <em style="font-style:normal;color:#7c3aed">[Clang]</em></span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A function with a non-void return type does not return a value on some path.</span><span class="rule-label">Fix</span><span class="rule-fix">Add 'return &lt;value&gt;;' before the closing brace of the function.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">function does not return a value</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A non-void function reaches the end without a return statement.</span><span class="rule-label">Fix</span><span class="rule-fix">Add a return statement with an appropriate value to all exit paths of the function.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#3</span><span class="rule-pattern">control (reaches|may reach) end of non-void function  <em style="font-style:normal;color:#7c3aed">[GCC]</em></span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler detected that control can reach the end of a non-void function without returning.</span><span class="rule-label">Fix</span><span class="rule-fix">Ensure every execution path in the function returns a value of the declared type.</span></div></div>
+  </div>
+
+  <div class="category c-WRONG_RETURN" id="WRONG_RETURN">
+    <div class="cat-header"><span class="cat-name">WRONG_RETURN</span><span class="cat-badge">1 rule</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">void function '...' should not return a value</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A void function has a return statement that returns a value.</span><span class="rule-label">Fix</span><span class="rule-fix">Change 'return &lt;value&gt;;' to just 'return;', or change the return type of the function.</span></div></div>
+  </div>
+
+  
+
+  <div class="category c-POINTER_ERROR" id="POINTER_ERROR">
+    <div class="cat-header"><span class="cat-name">POINTER_ERROR</span><span class="cat-badge">6 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">indirection requires pointer operand</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The dereference operator '*' is applied to a non-pointer value.</span><span class="rule-label">Fix</span><span class="rule-fix">Remove the '*' dereference operator, or change the variable to a pointer type.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">cannot take the address of an rvalue</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The address-of operator '&amp;' is applied to a temporary (rvalue), which has no address.</span><span class="rule-label">Fix</span><span class="rule-fix">Assign the value to a local variable before taking its address.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#3</span><span class="rule-pattern">cannot dereference non-pointer type</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A dereference operation is attempted on a non-pointer type.</span><span class="rule-label">Fix</span><span class="rule-fix">Remove the '*' operator or declare the variable as a pointer.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#4</span><span class="rule-pattern">dereferencing pointer to incomplete type</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A pointer is dereferenced, but the pointed-to type is only forward-declared.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the full class/struct definition with #include before the dereference point.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#5</span><span class="rule-pattern">taking address of temporary</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A pointer is taken to a temporary value, which will be destroyed after the statement.</span><span class="rule-label">Fix</span><span class="rule-fix">Assign the value to a local variable, then take its address.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#6</span><span class="rule-pattern">(subscript|array subscript) of pointer to incomplete type</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">Array subscript is used on a pointer to an incomplete (forward-declared) type.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the full type definition with #include before the subscript operation.</span></div></div>
+  </div>
+
+  <div class="category c-REFERENCE_ERROR" id="REFERENCE_ERROR">
+    <div class="cat-header"><span class="cat-name">REFERENCE_ERROR</span><span class="cat-badge">1 rule</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">cannot bind (non-const|rvalue reference of type)</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A reference binding constraint is violated.</span><span class="rule-label">Fix</span><span class="rule-fix">Change the parameter or variable to 'const T&amp;' or pass by value.</span></div></div>
+  </div>
+
+  
+
+  <div class="category c-TEMPLATE_ERROR" id="TEMPLATE_ERROR">
+    <div class="cat-header"><span class="cat-name">TEMPLATE_ERROR</span><span class="cat-badge">5 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">template (instantiation|argument) (deduction (failed|error)|error)</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler cannot deduce the template arguments from the provided arguments.</span><span class="rule-label">Fix</span><span class="rule-fix">Provide explicit template arguments like func&lt;int&gt;() or ensure argument types are correct.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">invalid use of (incomplete type|template)</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A template or incomplete type is used in a way that is not permitted.</span><span class="rule-label">Fix</span><span class="rule-fix">Move the full type definition before the template instantiation.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#3</span><span class="rule-pattern">'typename' (keyword|specifier) used outside of template</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The 'typename' keyword is used where it is not applicable.</span><span class="rule-label">Fix</span><span class="rule-fix">Remove the 'typename' keyword, or move the code into a template context.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#4</span><span class="rule-pattern">use of class template '...' requires template arguments</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A class template is used without specifying its required type arguments.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the template type argument (e.g. change 'vector' to 'vector&lt;int&gt;').</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#5</span><span class="rule-pattern">in instantiation of (function|class|member) template</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The error occurred inside a template instantiation.</span><span class="rule-label">Fix</span><span class="rule-fix">Ensure the types used to instantiate the template satisfy all type requirements.</span></div></div>
+  </div>
+
+  <div class="category c-ITERATOR_ERROR" id="ITERATOR_ERROR">
+    <div class="cat-header"><span class="cat-name">ITERATOR_ERROR</span><span class="cat-badge">1 rule</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">no (type|member) named 'iterator' in '...'</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The type used does not have an iterator member type.</span><span class="rule-label">Fix</span><span class="rule-fix">Use a standard container type or define the iterator type in your class.</span></div></div>
+  </div>
+
+  
+
+  <div class="category c-OPERATOR_ERROR" id="OPERATOR_ERROR">
+    <div class="cat-header"><span class="cat-name">OPERATOR_ERROR</span><span class="cat-badge">5 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">(no match|no viable) for operator</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">No matching operator overload is found for the given operand types.</span><span class="rule-label">Fix</span><span class="rule-fix">Convert the operands to compatible types or define the operator overload.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">overloaded '...' not found</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler could not find a matching overloaded operator.</span><span class="rule-label">Fix</span><span class="rule-fix">Add an operator overload function that handles the types used.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#3</span><span class="rule-pattern">invalid operands to binary expression</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The binary operator has operands of incompatible types.</span><span class="rule-label">Fix</span><span class="rule-fix">Convert the operands to compatible types or define the operator overload.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#4</span><span class="rule-pattern">expression is not assignable</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The left-hand side of an assignment is not assignable (not an lvalue or is const).</span><span class="rule-label">Fix</span><span class="rule-fix">Remove the const qualifier from the variable, or change the code to avoid assigning to a non-assignable expression.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#5</span><span class="rule-pattern">lvalue required as (left operand of|unary|assignment target)</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">An assignable location (lvalue) is required but a temporary or literal was provided.</span><span class="rule-label">Fix</span><span class="rule-fix">Assign to a named variable instead of a literal or temporary expression.</span></div></div>
+  </div>
+
+  
+
+  <div class="category c-ACCESS_VIOLATION" id="ACCESS_VIOLATION">
+    <div class="cat-header"><span class="cat-name">ACCESS_VIOLATION</span><span class="cat-badge">2 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">private member '...' of class '...'</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A private member of the class is being accessed from outside the class.</span><span class="rule-label">Fix</span><span class="rule-fix">Access private members only from within the class or through a public interface.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">'...' is (a private|private|protected) member</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The member cannot be accessed from the current context due to access control.</span><span class="rule-label">Fix</span><span class="rule-fix">Provide a public accessor method or declare the accessing code as a friend.</span></div></div>
+  </div>
+
+  <div class="category c-ABSTRACT_CLASS" id="ABSTRACT_CLASS">
+    <div class="cat-header"><span class="cat-name">ABSTRACT_CLASS</span><span class="cat-badge">3 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">object of abstract class type '...' is not allowed</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">Cannot instantiate an abstract class — it has unimplemented pure virtual functions.</span><span class="rule-label">Fix</span><span class="rule-fix">Create a derived class that overrides all pure virtual methods, then instantiate that derived class.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">(cannot|not allowed to) instantiate abstract class</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A class with pure virtual functions cannot be instantiated directly.</span><span class="rule-label">Fix</span><span class="rule-fix">Create a concrete derived class that implements all pure virtual methods.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#3</span><span class="rule-pattern">call to (pure virtual|overridden) function</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A pure virtual function is called directly, which is not allowed.</span><span class="rule-label">Fix</span><span class="rule-fix">Override the pure virtual function in a concrete derived class and call through an instance of that class.</span></div></div>
+  </div>
+
+  <div class="category c-INCOMPLETE_TYPE" id="INCOMPLETE_TYPE">
+    <div class="cat-header"><span class="cat-name">INCOMPLETE_TYPE</span><span class="cat-badge">2 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">member access into incomplete type</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A member is being accessed on a type that is only forward-declared, not fully defined.</span><span class="rule-label">Fix</span><span class="rule-fix">Move the #include for the full class definition before the point of member access.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">forward declaration of '...'</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">Only a forward declaration is visible here, not the full definition.</span><span class="rule-label">Fix</span><span class="rule-fix">Add the full type definition or move the #include before this usage.</span></div></div>
+  </div>
+
+  <div class="category c-DELETED_FUNCTION" id="DELETED_FUNCTION">
+    <div class="cat-header"><span class="cat-name">DELETED_FUNCTION</span><span class="cat-badge">1 rule</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">use of (deleted function|deleted member function)</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A function that has been explicitly deleted (with '= delete') is called.</span><span class="rule-label">Fix</span><span class="rule-fix">Avoid calling the deleted function. If copying or moving is needed, implement the appropriate constructor/assignment operator.</span></div></div>
+  </div>
+
+  
+
+  <div class="category c-REDEFINITION" id="REDEFINITION">
+    <div class="cat-header"><span class="cat-name">REDEFINITION</span><span class="cat-badge">3 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">redefinition of '...'</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The same name is defined more than once in the same scope.</span><span class="rule-label">Fix</span><span class="rule-fix">Remove the duplicate definition or rename one of the definitions.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">conflicting (types|return type|declaration)</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A name is declared or defined with conflicting types.</span><span class="rule-label">Fix</span><span class="rule-fix">Make the type consistent across all declarations and definitions.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#3</span><span class="rule-pattern">previous definition is here</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">This note indicates where the first definition appears.</span><span class="rule-label">Fix</span><span class="rule-fix">Remove the duplicate definition or rename one instance.</span></div></div>
+  </div>
+
+  <div class="category c-SHADOWING" id="SHADOWING">
+    <div class="cat-header"><span class="cat-name">SHADOWING</span><span class="cat-badge">1 rule</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">declaration of '...' shadows a (parameter|local|global|member)</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A new declaration hides a name from an outer scope.</span><span class="rule-label">Fix</span><span class="rule-fix">Use a unique name for the inner variable to avoid shadowing.</span></div></div>
+  </div>
+
+  
+
+  <div class="category c-LINKER_ERROR" id="LINKER_ERROR">
+    <div class="cat-header"><span class="cat-name">LINKER_ERROR</span><span class="cat-badge">3 rules</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">error: (ld|linker) returned (1|non-zero) exit status</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The linker failed to produce the final executable.</span><span class="rule-label">Fix</span><span class="rule-fix">Resolve undefined references by providing the missing definitions or adding the required library with -l.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#2</span><span class="rule-pattern">undefined (reference|symbol) to '...'</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The linker could not find the definition for the named function or variable.</span><span class="rule-label">Fix</span><span class="rule-fix">Provide the function definition, or link the required library with -l&lt;libname&gt;.</span></div></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#3</span><span class="rule-pattern">multiple definition of '...'</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The same function or variable is defined in multiple translation units.</span><span class="rule-label">Fix</span><span class="rule-fix">Use 'inline' for header-only definitions or move the definition to a single .cpp file.</span></div></div>
+  </div>
+
+  <div class="category c-IO_ERROR" id="IO_ERROR">
+    <div class="cat-header"><span class="cat-name">IO_ERROR</span><span class="cat-badge">1 rule</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">cannot open (output file|source file)</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">The compiler or linker cannot open a required file.</span><span class="rule-label">Fix</span><span class="rule-fix">Check that the output directory exists and has write permissions.</span></div></div>
+  </div>
+
+  
+
+  <div class="category c-CONSTEXPR_ERROR" id="CONSTEXPR_ERROR">
+    <div class="cat-header"><span class="cat-name">CONSTEXPR_ERROR</span><span class="cat-badge">1 rule</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">'...' is not a (constexpr|consteval) function</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A function required to be constexpr does not satisfy the constraints.</span><span class="rule-label">Fix</span><span class="rule-fix">Remove non-constexpr operations from the constexpr function, or remove the constexpr qualifier.</span></div></div>
+  </div>
+
+  <div class="category c-DIVISION_BY_ZERO" id="DIVISION_BY_ZERO">
+    <div class="cat-header"><span class="cat-name">DIVISION_BY_ZERO</span><span class="cat-badge">1 rule</span></div>
+    <div class="rule"><div class="rule-header"><span class="rule-num">#1</span><span class="rule-pattern">division by zero</span></div><div class="rule-body"><span class="rule-label">Compiler</span><span class="rule-text">A compile-time division by zero was detected.</span><span class="rule-label">Fix</span><span class="rule-fix">Ensure the divisor is non-zero, or add a runtime check.</span></div></div>
+  </div>
+
+  <footer>Made with IBM Bob</footer>
+</div>
+</body>
+</html>
