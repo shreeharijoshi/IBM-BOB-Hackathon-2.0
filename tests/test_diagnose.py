@@ -390,6 +390,123 @@ def test_evidence_is_well_formed_for_unknown_error():
     assert "code" in evidence
 
 
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 regression: diagnostic line-number integrity
+# ---------------------------------------------------------------------------
+# These tests cover the full pipeline (diagnose() → enrich_context →
+# _extract_evidence) and verify that:
+#   * Valid compiler lines (first, middle, last) pass through unchanged.
+#   * An out-of-range compiler line is detected and flagged with line_mismatch.
+#   * Invalid lines are never clamped to the last source line.
+#   * No source text is invented for an invalid line.
+
+# 15-line source used in the OOB tests:
+#   line 1:  int main() {
+#   lines 2-13 (12 lines):  "    int x = 0;"
+#   line 14:  "    return 0;"
+#   line 15:  "}"
+#   (no trailing newline → splitlines gives exactly 15 entries)
+_SOURCE_15L = "int main() {\n" + "    int x = 0;\n" * 12 + "    return 0;\n}"
+# Line count: splitlines() on the above gives exactly 15 lines.
+
+
+def test_pipeline_valid_first_line():
+    """Diagnostic on line 1 of the source — evidence.line == 1, no mismatch."""
+    source = "int main() {\n    int x = 0\n    return 0;\n}\n"
+    # 4-line source; line 1 is valid
+    stderr = "/tmp/t.cpp:1:1: error: expected ';' before 'int'\n"
+    with patch("backend.diagnose.run_compiler",
+               return_value=_compiler_result(stderr)):
+        result = diagnose(source)
+
+    _assert_ok(result)
+    ev = result["diagnosis"]["evidence"]
+    assert ev["line"] == 1
+    assert ev.get("line_mismatch") is None or ev.get("line_mismatch") is False
+
+
+def test_pipeline_valid_middle_line():
+    """Diagnostic on a middle line — evidence.line preserved, no mismatch."""
+    source = "int main() {\n    int x = 0\n    return 0;\n}\n"
+    stderr = "/tmp/t.cpp:2:5: error: expected ';' before 'return'\n"
+    with patch("backend.diagnose.run_compiler",
+               return_value=_compiler_result(stderr)):
+        result = diagnose(source)
+
+    _assert_ok(result)
+    ev = result["diagnosis"]["evidence"]
+    assert ev["line"] == 2
+    assert ev.get("line_mismatch") is None or ev.get("line_mismatch") is False
+
+
+def test_pipeline_valid_last_line():
+    """Diagnostic on the last line — evidence.line preserved, no mismatch."""
+    source = "int main() {\n    return 0;\n}\n"
+    # 3-line source (splitlines gives ['int main() {', '    return 0;', '}'])
+    stderr = "/tmp/t.cpp:3:1: error: expected ';' before '}'\n"
+    with patch("backend.diagnose.run_compiler",
+               return_value=_compiler_result(stderr)):
+        result = diagnose(source)
+
+    _assert_ok(result)
+    ev = result["diagnosis"]["evidence"]
+    assert ev["line"] == 3
+    assert ev.get("line_mismatch") is None or ev.get("line_mismatch") is False
+
+
+def test_pipeline_out_of_range_line_sets_mismatch_flag():
+    """Compiler reports line 19 on a 15-line source — mismatch must be flagged."""
+    # 15-line source; compiler reports line 19 (e.g. stale object / macro expansion)
+    source = _SOURCE_15L
+    assert len(source.splitlines()) == 15, "fixture must be 15 lines"
+    stderr = "/tmp/t.cpp:19:1: error: expected ';' before '}'\n"
+    with patch("backend.diagnose.run_compiler",
+               return_value=_compiler_result(stderr)):
+        result = diagnose(source)
+
+    _assert_ok(result)
+    ev = result["diagnosis"]["evidence"]
+    # Line must NOT be clamped to 15
+    assert ev["line"] == 19, "Compiler line must be preserved, not clamped"
+    # No source text invented
+    assert ev["code"] == "", "No source text must be invented for an OOB line"
+    # Mismatch must be detected
+    assert ev.get("line_mismatch") is True, \
+        "line_mismatch must be True when compiler line exceeds source length"
+
+
+def test_pipeline_out_of_range_line_raw_preserved():
+    """For an OOB diagnostic, the raw.line field still carries the compiler line."""
+    source = _SOURCE_15L
+    stderr = "/tmp/t.cpp:19:3: error: expected ';' before '}'\n"
+    with patch("backend.diagnose.run_compiler",
+               return_value=_compiler_result(stderr)):
+        result = diagnose(source)
+
+    _assert_ok(result)
+    # raw field must always carry the original compiler location unchanged
+    assert result["diagnosis"]["raw"]["line"] == 19
+    assert result["diagnosis"]["raw"]["column"] == 3
+
+
+def test_pipeline_out_of_range_bob_fallback_also_flags_mismatch():
+    """Unknown error with OOB line via Bob fallback must also set line_mismatch."""
+    source = _SOURCE_15L
+    stderr = "/tmp/t.cpp:19:1: error: mysterious unknowable error XYZ\n"
+    with patch("backend.diagnose.run_compiler",
+               return_value=_compiler_result(stderr)):
+        result = diagnose(source)
+
+    _assert_ok(result)
+    assert result["diagnosis"]["analysis_mode"] == "ai"
+    ev = result["diagnosis"]["evidence"]
+    assert ev["line"] == 19
+    assert ev["code"] == ""
+    assert ev.get("line_mismatch") is True
+
+
 # ---------------------------------------------------------------------------
 # Integration tests (require real GCC on PATH)
 # ---------------------------------------------------------------------------

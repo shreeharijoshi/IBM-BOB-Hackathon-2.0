@@ -607,3 +607,65 @@ def test_cli_output_matches_direct_diagnose_call(file_path: Path):
         assert cli["diagnosis"]["analysis_mode"] == direct["diagnosis"]["analysis_mode"]
         assert cli["diagnosis"]["evidence"]["line"] == direct["diagnosis"]["evidence"]["line"]
         assert cli["diagnosis"]["evidence"]["code"] == direct["diagnosis"]["evidence"]["code"]
+
+
+# ---------------------------------------------------------------------------
+# Phase 11: Installed-VSIX backend reliability
+# ---------------------------------------------------------------------------
+# When the extension is installed from a .vsix the Python backend is bundled
+# *inside* the extension directory (at extensionPath/backend/diagnose.py).
+# The JS extension then calls:
+#
+#     python  <extensionPath>/backend/diagnose.py  --file  <absolute_cpp_path>
+#
+# Two properties must hold:
+#   a) diagnose.py can be invoked with an absolute --file path regardless of
+#      the current working directory (i.e. the user's project folder, which is
+#      completely outside the repo / extension).
+#   b) The sys.path manipulation inside diagnose.py correctly resolves the
+#      sibling backend package even when cwd is arbitrary.
+#
+# This test copies the backend directory to a temp location (simulating the
+# installed-VSIX layout), then runs diagnose.py from a *different* temp
+# directory (simulating the user's project) with an absolute --file path.
+
+def test_vsix_installed_path_cli_works_outside_repo(tmp_path):
+    """The CLI adapter must work when run from a directory outside the repo.
+
+    Simulates the installed-VSIX scenario:
+      - backend/ is copied to <fake_extension_dir>/backend/
+      - diagnose.py is invoked from <unrelated_work_dir>/
+      - --file points to an absolute path of a known C++ file
+    """
+    import shutil
+
+    # --- set up fake extension directory (mirrors what vscode:prepublish does) ---
+    fake_ext_dir = tmp_path / "cpp-diagnostic-0.2.0"
+    fake_ext_dir.mkdir()
+    shutil.copytree(str(_REPO / "backend"), str(fake_ext_dir / "backend"))
+
+    # --- the user's working directory: completely unrelated to the extension ---
+    user_cwd = tmp_path / "user_project"
+    user_cwd.mkdir()
+
+    # --- an absolute path to the C++ file (as the extension would provide) ---
+    cpp_file = _F01.resolve()
+
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(fake_ext_dir / "backend" / "diagnose.py"),
+            "--file",
+            str(cpp_file),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(user_cwd),          # <-- cwd is outside the repo/extension
+    )
+
+    assert proc.returncode == 0, f"CLI exited with {proc.returncode};\nstderr: {proc.stderr}"
+    assert proc.stdout.strip(), "CLI produced no stdout"
+    payload = json.loads(proc.stdout.strip())
+    assert payload["status"] == "ok", \
+        f"Expected status='ok' for {cpp_file.name}, got: {payload}"
+    assert payload["diagnosis"]["error_type"] == "MISSING_SEMICOLON"

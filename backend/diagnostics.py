@@ -509,6 +509,32 @@ _RULES: list[dict] = [
         "suggestion": "Add the required #include at the top of your file (e.g. #include <iostream>).",
     },
     {
+        # GCC (all versions): "'std' was not declared in this scope"
+        # Emitted when std:: qualified names are used but no standard-library
+        # headers are included.  The 'std' namespace identifier is never a
+        # user-defined variable, so this message always means a missing #include.
+        # Priority 16 ensures it beats the generic "was not declared in this
+        # scope" → UNDEFINED_VARIABLE rule (priority 10).
+        "pattern": re.compile(r"'std' was not declared in this scope", re.IGNORECASE),
+        "error_type": "MISSING_INCLUDE",
+        "priority": 16,
+        "compiler_explanation": (
+            "The 'std' namespace is not visible because no standard-library "
+            "header has been included.  Old GCC versions report this as a "
+            "plain 'not declared in this scope' error rather than a namespace "
+            "lookup failure."
+        ),
+        "source_explanation": (
+            "Code is using std:: qualified names (e.g. std::cout, std::string) "
+            "but the required #include directive is missing at the top of the file."
+        ),
+        "what_to_check": (
+            "Check the top of the file for the required #include "
+            "(e.g. #include <iostream> for std::cout, #include <string> for std::string)."
+        ),
+        "suggestion": "Add the required #include at the top of your file (e.g. #include <iostream>).",
+    },
+    {
         "pattern": re.compile(r"no member named '([^']+)' in namespace 'std'", re.IGNORECASE),
         "error_type": "MISSING_INCLUDE",
         "priority": 12,
@@ -1173,24 +1199,35 @@ def _get_text(contextual_diagnostic: dict) -> str:
 def _extract_evidence(contextual_diagnostic: dict) -> dict:
     """Extract the most relevant evidence line from the diagnostic dict.
 
-    Prefers the source_context entry whose 'line' matches the diagnostic's
-    reported line number. Falls back to the first available context entry,
-    then to None/empty if nothing is present.
+    Uses the source_context entry whose 'line' matches the diagnostic's
+    reported line number exactly.  If no matching entry exists, returns safe
+    empty evidence — never falls back to an unrelated first/arbitrary entry.
+
+    When enrich_context has stored 'source_line_count' and the compiler's
+    reported line is beyond the source length, the returned dict includes
+    ``line_mismatch: True`` so consumers can detect the compiler/source
+    desync without silently navigating to a non-existent line.
     """
     diag_line = contextual_diagnostic.get("line")
     source_context = contextual_diagnostic.get("source_context", [])
 
+    # Only use context when the entry line matches the diagnostic line exactly.
     if diag_line is not None and source_context:
         for entry in source_context:
             if entry.get("line") == diag_line:
                 return {"line": entry["line"], "code": entry.get("code", "")}
 
-    # Fall back to first available context entry
-    if source_context:
-        first = source_context[0]
-        return {"line": first.get("line"), "code": first.get("code", "")}
+    # No matching context entry.  If we know the source length and the
+    # compiler's line is beyond it, flag the mismatch explicitly — do not
+    # clamp, do not invent source text, do not return an unrelated line.
+    source_line_count = contextual_diagnostic.get("source_line_count")
+    if (
+        diag_line is not None
+        and source_line_count is not None
+        and diag_line > source_line_count
+    ):
+        return {"line": diag_line, "code": "", "line_mismatch": True}
 
-    # No context available
     return {"line": diag_line, "code": ""}
 
 

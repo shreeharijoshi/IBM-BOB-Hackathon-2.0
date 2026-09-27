@@ -260,6 +260,48 @@ class TestMissingInclude:
     def test_namespace_has_no_member_named(self):
         _check("main.cpp:5:10: error: namespace 'std' has no member named 'cout'", "MISSING_INCLUDE")
 
+    # ------------------------------------------------------------------
+    # Regression: old GCC "'std' was not declared in this scope" must
+    # NOT be classified as UNDEFINED_VARIABLE (issue #1 in the audit).
+    # ------------------------------------------------------------------
+
+    def test_gcc_old_std_not_declared_basic(self):
+        """GCC 6: 'std' was not declared → MISSING_INCLUDE, not UNDEFINED_VARIABLE."""
+        _check(
+            "main.cpp:3:5: error: 'std' was not declared in this scope",
+            "MISSING_INCLUDE",
+        )
+
+    def test_gcc_old_std_not_declared_beats_generic(self):
+        """The specific 'std' rule must win over the generic undeclared rule."""
+        result = _check(
+            "main.cpp:5:10: error: 'std' was not declared in this scope",
+            "MISSING_INCLUDE",
+        )
+        # Confirm the result points to a missing #include, not a typo/missing decl
+        assert "include" in result["suggestion"].lower()
+
+    def test_gcc_old_std_not_declared_with_column(self):
+        """Variant with different line/column numbers still classifies correctly."""
+        _check(
+            "foo.cpp:10:14: error: 'std' was not declared in this scope",
+            "MISSING_INCLUDE",
+        )
+
+    def test_genuine_undefined_variable_unchanged(self):
+        """Genuine user variable ('myVar') must still → UNDEFINED_VARIABLE."""
+        _check(
+            "main.cpp:4:5: error: 'myVar' was not declared in this scope",
+            "UNDEFINED_VARIABLE",
+        )
+
+    def test_genuine_undefined_function_unchanged(self):
+        """A non-std undeclared name must still → UNDEFINED_VARIABLE."""
+        _check(
+            "main.cpp:7:3: error: 'compute' was not declared in this scope",
+            "UNDEFINED_VARIABLE",
+        )
+
 
 # ===========================================================================
 # MEMBER NOT FOUND
@@ -535,7 +577,9 @@ class TestEvidenceSelection:
         assert result["evidence"]["line"] == 5
         assert result["evidence"]["code"] == "    return x;"
 
-    def test_fallback_to_first_entry_when_no_match(self):
+    def test_no_match_in_context_returns_safe_empty(self):
+        """Phase 3: when diag line is absent from context, return safe empty —
+        never fall back to an unrelated first context entry."""
         diag = {
             "normalized": "main.cpp:10:5: error: expected ';' before 'return'",
             "line": 10,
@@ -546,8 +590,16 @@ class TestEvidenceSelection:
         }
         result = analyze_simple_errors(diag)
         assert result is not None
-        # Line 10 not in context, so falls back to first entry
-        assert result["evidence"]["line"] == 8
+        ev = result["evidence"]
+        # Line 10 is not in the context window — must NOT fall back to line 8.
+        # Safe empty: preserve the compiler line, return no source text.
+        assert ev["line"] == 10, (
+            "Compiler line must be preserved, not replaced by first context entry"
+        )
+        assert ev["code"] == "", "No unrelated source text should be returned"
+        assert ev.get("line_mismatch") is not True, (
+            "No line_mismatch flag without source_line_count"
+        )
 
     def test_no_source_context_still_returns_result(self):
         diag = {
@@ -559,6 +611,128 @@ class TestEvidenceSelection:
         assert result is not None
         assert result["evidence"]["line"] == 3
         assert result["evidence"]["code"] == ""
+
+    # ------------------------------------------------------------------
+    # Phase 2 regression: line-number integrity / out-of-bounds detection
+    # ------------------------------------------------------------------
+
+    def test_valid_first_line_no_mismatch(self):
+        """Line 1 diagnostic on a 5-line source — valid, no mismatch flag."""
+        diag = {
+            "normalized": "main.cpp:1:1: error: expected ';' before '}'",
+            "line": 1,
+            "source_context": [{"line": 1, "code": "int x = 0"}],
+            "source_line_count": 5,
+        }
+        result = analyze_simple_errors(diag)
+        assert result is not None
+        ev = result["evidence"]
+        assert ev["line"] == 1
+        assert ev.get("line_mismatch") is None or ev.get("line_mismatch") is False
+
+    def test_valid_middle_line_no_mismatch(self):
+        """Line 3 of 5 — valid, no mismatch flag."""
+        diag = {
+            "normalized": "main.cpp:3:5: error: expected ';' before '}'",
+            "line": 3,
+            "source_context": [{"line": 3, "code": "    int y = 0"}],
+            "source_line_count": 5,
+        }
+        result = analyze_simple_errors(diag)
+        assert result is not None
+        ev = result["evidence"]
+        assert ev["line"] == 3
+        assert ev.get("line_mismatch") is None or ev.get("line_mismatch") is False
+
+    def test_valid_last_line_no_mismatch(self):
+        """Diagnostic exactly on the last line — valid, no mismatch flag."""
+        diag = {
+            "normalized": "main.cpp:5:1: error: expected ';' before '}'",
+            "line": 5,
+            "source_context": [{"line": 5, "code": "}"}],
+            "source_line_count": 5,
+        }
+        result = analyze_simple_errors(diag)
+        assert result is not None
+        ev = result["evidence"]
+        assert ev["line"] == 5
+        assert ev.get("line_mismatch") is None or ev.get("line_mismatch") is False
+
+    def test_out_of_range_line_sets_mismatch_flag(self):
+        """Line 19 on a 15-line source — compiler/source mismatch must be flagged."""
+        diag = {
+            "normalized": "main.cpp:19:1: error: expected ';' before '}'",
+            "line": 19,
+            "source_context": [],   # get_source_context returns [] for OOB line
+            "source_line_count": 15,
+        }
+        result = analyze_simple_errors(diag)
+        assert result is not None
+        ev = result["evidence"]
+        # Compiler line preserved — do NOT clamp to 15
+        assert ev["line"] == 19, "Compiler line must not be altered or clamped"
+        # No invented source text
+        assert ev["code"] == "", "No source text must be invented for an OOB line"
+        # Mismatch must be flagged
+        assert ev.get("line_mismatch") is True, \
+            "line_mismatch must be True when compiler line exceeds source length"
+
+    def test_out_of_range_line_no_source_line_count_no_mismatch_flag(self):
+        """Without source_line_count (manually built diag), no mismatch flag added."""
+        diag = {
+            "normalized": "main.cpp:99:1: error: expected ';' before '}'",
+            "line": 99,
+            "source_context": [],
+            # deliberately no source_line_count — simulates old/manual tests
+        }
+        result = analyze_simple_errors(diag)
+        assert result is not None
+        ev = result["evidence"]
+        assert ev["line"] == 99
+        assert ev["code"] == ""
+        assert "line_mismatch" not in ev, \
+            "line_mismatch must not be added when source_line_count is absent"
+
+    def test_unmatched_line_within_range_no_mismatch(self):
+        """Phase 3: diag line not in context window but within source_line_count —
+        safe empty evidence, no line_mismatch flag."""
+        diag = {
+            "normalized": "main.cpp:7:3: error: expected ';' before '}'",
+            "line": 7,
+            "source_context": [
+                {"line": 5, "code": "int a = 1;"},
+                {"line": 6, "code": "int b = 2;"},
+                # line 7 deliberately absent from the window
+            ],
+            "source_line_count": 20,
+        }
+        result = analyze_simple_errors(diag)
+        assert result is not None
+        ev = result["evidence"]
+        # Must NOT borrow line 5 or 6 — those are unrelated
+        assert ev["line"] == 7, "Compiler line must be preserved"
+        assert ev["code"] == "", "No unrelated source text should be returned"
+        assert ev.get("line_mismatch") is not True, \
+            "No mismatch flag when diag line is within source_line_count"
+
+    def test_exact_match_in_context_with_source_line_count(self):
+        """Phase 3: when context entry matches diag line, return it (no mismatch)."""
+        diag = {
+            "normalized": "main.cpp:4:1: error: expected ';' before '}'",
+            "line": 4,
+            "source_context": [
+                {"line": 2, "code": "int a = 1;"},
+                {"line": 4, "code": "int c = 3"},
+                {"line": 6, "code": "}"},
+            ],
+            "source_line_count": 10,
+        }
+        result = analyze_simple_errors(diag)
+        assert result is not None
+        ev = result["evidence"]
+        assert ev["line"] == 4
+        assert ev["code"] == "int c = 3"
+        assert ev.get("line_mismatch") is not True
 
 
 # ===========================================================================

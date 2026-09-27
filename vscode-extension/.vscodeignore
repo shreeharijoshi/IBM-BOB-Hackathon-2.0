@@ -4,3 +4,7 @@ node_modules/
 .vscode-test/
 *.map
 tsconfig.json
+# Exclude compiled Python artefacts from the backend bundle
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.pyc

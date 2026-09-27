@@ -117,7 +117,22 @@ function getDecorationType(): vscode.TextEditorDecorationType {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Return the directory that contains the `backend/` folder.
+ *
+ * When the extension is installed from a VSIX the Python backend is bundled
+ * directly inside the extension directory, so `extensionPath/backend/diagnose.py`
+ * exists and we return `extensionPath`.
+ *
+ * During development (running from the repository) the backend lives one level
+ * up (`<repo-root>/backend/`), so we return `extensionPath/..` as before.
+ */
 function repoRoot(context: vscode.ExtensionContext): string {
+  const fs = require("fs") as typeof import("fs");
+  const bundled = path.join(context.extensionPath, "backend", "diagnose.py");
+  if (fs.existsSync(bundled)) {
+    return context.extensionPath;
+  }
   return path.resolve(context.extensionPath, "..");
 }
 

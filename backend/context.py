@@ -71,4 +71,7 @@ def get_source_context(
 def enrich_context(diagnostic: dict, source_code: str) -> dict:
     result = dict(diagnostic)
     result["source_context"] = get_source_context(diagnostic, source_code)
+    # Store the actual source length so downstream code can detect line-number
+    # mismatches (compiler line > source length) without needing source_code.
+    result["source_line_count"] = len(source_code.splitlines())
     return result

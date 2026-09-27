@@ -2,15 +2,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 
-from backend.bob import analyze_with_bob
 from backend.compiler import (
     GCCNotFoundError,
     GCCTimeoutError,
     parse_compiler_output,
     run_compiler,
 )
-from backend.context import enrich_context
-from backend.diagnostics import analyze_simple_errors
+from backend.pipeline import analyse_one, build_result
 
 app = FastAPI(title="Context Diagnostic")
 
@@ -35,23 +33,6 @@ class DiagnoseRequest(BaseModel):
         return str(v)
 
 
-def _analyse_one(target: dict, source_code: str) -> dict:
-    """Run the full context + analysis pipeline on a single diagnostic.
-
-    Attaches a 'raw' field with the original compiler diagnostic fields.
-    """
-    contextual = enrich_context(target, source_code)
-    diagnosis = analyze_simple_errors(contextual) or analyze_with_bob(contextual)
-    diagnosis["raw"] = {
-        "file": target.get("file", ""),
-        "line": target.get("line"),
-        "column": target.get("column"),
-        "severity": target.get("severity", "error"),
-        "message": target.get("message", ""),
-    }
-    return diagnosis
-
-
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -72,15 +53,17 @@ def diagnose(payload: DiagnoseRequest) -> dict:
         except GCCTimeoutError as exc:
             return {"status": "error", "message": str(exc)}
 
-    diagnostics = parse_compiler_output(compiler_output)
-    errors = [d for d in diagnostics if d.get("severity") in ("error", "fatal error")]
-    target = errors[0] if errors else (diagnostics[0] if diagnostics else None)
+    parsed = parse_compiler_output(compiler_output)
+    errors = [d for d in parsed if d.get("severity") in ("error", "fatal error")]
 
-    if not target:
-        if compiler_output.strip():
-            # Treat unparsed compiler output as raw message
+    # Only errors are actionable.  Warnings and notes must never be treated as
+    # errors — a warning-only compiler_output should produce status='clean'.
+    if not errors:
+        if compiler_output.strip() and not parsed:
+            # Entirely unparsed compiler output (no structured diagnostics at all)
+            # — treat the raw text as a message to analyse.
             raw_diag = {"normalized": compiler_output.strip(), "message": compiler_output.strip()}
-            diagnosis = _analyse_one(raw_diag, source_code)
+            diagnosis = analyse_one(raw_diag, source_code)
             return {
                 "status": "ok",
                 "diagnosis": diagnosis,
@@ -93,17 +76,7 @@ def diagnose(payload: DiagnoseRequest) -> dict:
             "pipeline": ["compiler.py"],
         }
 
-    # Deep-analyse ALL errors.
-    all_diagnoses = [_analyse_one(err, source_code) for err in errors]
-
-    return {
-        "status": "ok",
-        "diagnosis": all_diagnoses[0],      # first error — backward compat
-        "diagnostics": all_diagnoses,       # all errors — full multi-error support
-        "pipeline": [
-            "compiler.py",
-            "context.py",
-            "diagnostics.py",
-            "bob.py",
-        ],
-    }
+    # Deep-analyse ALL errors, then attach the pipeline field HTTP callers expect.
+    result = build_result(errors, source_code)
+    result["pipeline"] = ["compiler.py", "context.py", "diagnostics.py", "bob.py"]
+    return result

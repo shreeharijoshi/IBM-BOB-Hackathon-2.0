@@ -58,6 +58,18 @@ def analyze_with_bob(contextual_diagnostic: dict) -> dict:
     elif source_context:
         first = source_context[0]
         evidence = {"line": first.get("line"), "code": first.get("code", "")}
+    else:
+        # No context: check for a compiler/source line-number mismatch.
+        # enrich_context() stores source_line_count; if the compiler line
+        # exceeds the source length we flag it rather than silently returning
+        # a line number that does not exist in the file.
+        source_line_count = contextual_diagnostic.get("source_line_count")
+        if (
+            diag_line is not None
+            and source_line_count is not None
+            and diag_line > source_line_count
+        ):
+            evidence = {"line": diag_line, "code": "", "line_mismatch": True}
 
     hint = _build_hint(compiler_message)
 

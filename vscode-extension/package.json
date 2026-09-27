@@ -106,7 +106,8 @@
   "scripts": {
     "compile": "tsc -p tsconfig.json",
     "watch": "tsc -watch -p tsconfig.json",
-    "vscode:prepublish": "npm run compile"
+    "copy-backend": "node -e \"const fs=require('fs'),path=require('path'),src=path.join(__dirname,'..','backend'),dst=path.join(__dirname,'backend');fs.rmSync(dst,{recursive:true,force:true});fs.cpSync(src,dst,{recursive:true});\"",
+    "vscode:prepublish": "npm run copy-backend && npm run compile"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

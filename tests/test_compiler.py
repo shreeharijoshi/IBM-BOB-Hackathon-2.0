@@ -235,3 +235,58 @@ def test_context_window_zero():
     assert len(ctx) == 1
     assert ctx[0]["line"] == 4
 
+
+
+# ---------------------------------------------------------------------------
+# enrich_context — source_line_count and line-number integrity
+# ---------------------------------------------------------------------------
+# Phase 2 regression tests: ensure enrich_context stores the source length and
+# that out-of-bounds diagnostic lines are not silently passed through.
+
+from backend.context import enrich_context
+
+# 15-line source used for out-of-range tests.
+_SOURCE_15 = "\n".join(f"line{i}" for i in range(1, 16))  # lines 1–15, no trailing \n
+
+
+def test_enrich_context_stores_source_line_count():
+    """enrich_context must add 'source_line_count' equal to the file length."""
+    diag = {"line": 3, "column": 1, "severity": "error", "message": "oops"}
+    enriched = enrich_context(diag, _SOURCE_15)
+    assert "source_line_count" in enriched, "source_line_count must be present in enriched dict"
+    assert enriched["source_line_count"] == 15
+
+
+def test_enrich_context_line_count_first_line():
+    """Valid diagnostic on line 1 — source_line_count still correct."""
+    diag = {"line": 1, "column": 1, "severity": "error", "message": "x"}
+    enriched = enrich_context(diag, _SOURCE_15)
+    assert enriched["source_line_count"] == 15
+    assert len(enriched["source_context"]) > 0, "context must be non-empty for valid line 1"
+    assert enriched["source_context"][0]["line"] == 1
+
+
+def test_enrich_context_line_count_last_line():
+    """Valid diagnostic on the last line — source_line_count still correct."""
+    diag = {"line": 15, "column": 1, "severity": "error", "message": "x"}
+    enriched = enrich_context(diag, _SOURCE_15)
+    assert enriched["source_line_count"] == 15
+    assert any(e["line"] == 15 for e in enriched["source_context"])
+
+
+def test_enrich_context_out_of_range_line_empty_context():
+    """A diagnostic line beyond the source length yields empty source_context."""
+    diag = {"line": 19, "column": 1, "severity": "error", "message": "x"}
+    enriched = enrich_context(diag, _SOURCE_15)
+    assert enriched["source_line_count"] == 15
+    assert enriched["source_context"] == [], \
+        "source_context must be empty for a line beyond source length"
+    # The original compiler line number must be preserved — not clamped
+    assert enriched["line"] == 19
+
+
+def test_enrich_context_line_count_single_line_source():
+    """Single-line source: source_line_count == 1."""
+    diag = {"line": 1, "column": 1, "severity": "error", "message": "x"}
+    enriched = enrich_context(diag, "int x = 0;")
+    assert enriched["source_line_count"] == 1

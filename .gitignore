@@ -140,3 +140,6 @@ frontend/.vite/
 # Local env variants
 .envrc
 .env.test
+
+# VS Code extension -- backend copy created by vscode:prepublish
+vscode-extension/backend/
