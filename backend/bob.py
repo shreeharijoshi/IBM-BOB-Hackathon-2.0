@@ -45,31 +45,29 @@ def analyze_with_bob(contextual_diagnostic: dict) -> dict:
     diag_line = contextual_diagnostic.get("line")
     source_context = contextual_diagnostic.get("source_context", [])
 
-    # Build evidence
+    # Build evidence: start with safe-empty using the compiler's reported line.
+    # If the source context contains an exact line-number match, use its code.
+    # Never fall back to an unrelated context entry (e.g. source_context[0])
+    # when the diagnostic line is absent from the window — that would replace
+    # the correct compiler line with whatever line happens to be first in the
+    # context window, which is the root cause of the 3 → 5 corruption.
     evidence: dict = {"line": diag_line, "code": ""}
     if diag_line is not None and source_context:
         for entry in source_context:
             if entry.get("line") == diag_line:
                 evidence = {"line": entry["line"], "code": entry.get("code", "")}
                 break
-        else:
-            first = source_context[0]
-            evidence = {"line": first.get("line"), "code": first.get("code", "")}
-    elif source_context:
-        first = source_context[0]
-        evidence = {"line": first.get("line"), "code": first.get("code", "")}
-    else:
-        # No context: check for a compiler/source line-number mismatch.
-        # enrich_context() stores source_line_count; if the compiler line
-        # exceeds the source length we flag it rather than silently returning
-        # a line number that does not exist in the file.
-        source_line_count = contextual_diagnostic.get("source_line_count")
-        if (
-            diag_line is not None
-            and source_line_count is not None
-            and diag_line > source_line_count
-        ):
-            evidence = {"line": diag_line, "code": "", "line_mismatch": True}
+        # No else: if diag_line not found in context, evidence stays {"line": diag_line, "code": ""}
+
+    # When context is absent and source_line_count is known, flag OOB mismatches.
+    source_line_count = contextual_diagnostic.get("source_line_count")
+    if (
+        evidence["code"] == ""
+        and diag_line is not None
+        and source_line_count is not None
+        and diag_line > source_line_count
+    ):
+        evidence["line_mismatch"] = True
 
     hint = _build_hint(compiler_message)
 
